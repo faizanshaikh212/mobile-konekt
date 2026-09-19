@@ -503,3 +503,139 @@
         transition-duration: .001ms !important;
     }
 }
+
+/* The deck is a responsive coordinate plane; controls retain their relative positions as it resizes. */
+.deck {
+    position: relative;
+    display: block;
+    max-width: 1440px;
+    height: calc(100% - 52px);
+    margin: 8px auto 0;
+}
+
+.layout-control {
+    position: absolute;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    transform: translate(-50%, -50%);
+}
+
+.layout-control-editing {
+    z-index: 5;
+    cursor: grab;
+    padding: 12px;
+    border: 1px dashed #5caaa4;
+    border-radius: 18px;
+    background: #183238aa;
+    box-shadow: 0 0 0 1px #61e4d022, 0 8px 25px #0005;
+}
+
+.layout-control-editing:active {
+    cursor: grabbing;
+    border-color: var(--cyan);
+}
+
+.face-button-control .game-button {
+    width: clamp(54px, 7vw, 82px);
+    height: clamp(54px, 7vw, 82px);
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: clamp(15px, 2vw, 23px);
+}
+
+.face-y .game-button {
+    color: #dca9ff;
+}
+
+.face-x .game-button {
+    color: #63c8ff;
+}
+
+.face-b .game-button {
+    color: #ff829e;
+}
+
+.face-a .game-button {
+    color: #75e5bd;
+}
+
+.drag-grip {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    z-index: 4;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #071414;
+    background: var(--cyan);
+    font-size: 15px;
+    line-height: 1;
+}
+
+.layout-editing .layout-control>* {
+    pointer-events: none;
+}
+
+.layout-editing .layout-control-editing {
+    touch-action: none;
+}
+
+.preset-select {
+    max-width: 110px;
+    color: #b9d4d3;
+    border: 1px solid #427e7b;
+    background: #121f22;
+    border-radius: 9px;
+    padding: 7px 8px;
+    font-size: 11px;
+}
+
+.edit-button {
+    color: var(--cyan);
+    border-color: #427e7b;
+}
+
+.save-button {
+    color: #071414;
+    background: var(--cyan);
+    border-color: var(--cyan);
+    font-weight: 700;
+}
+
+.layout-editing .deck::after {
+    content: 'Drag controls to customize your layout';
+    position: absolute;
+    left: 50%;
+    top: 4%;
+    transform: translateX(-50%);
+    color: #83aaa9;
+    font: 11px 'DM Mono', monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+@media (max-width: 700px) {
+    .deck {
+        height: calc(100% - 52px);
+    }
+
+    .layout-control-editing {
+        padding: 9px;
+    }
+
+    .preset-select {
+        max-width: 85px;
+    }
+}
+
+@media (orientation: portrait) and (max-width: 700px) {
+    .deck {
+        height: 650px;
+        min-height: 650px;
+    }
+}

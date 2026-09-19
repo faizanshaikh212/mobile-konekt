@@ -8,6 +8,12 @@ Build the frontend and Install the frontend and Python dependencies. Arch Linux 
 Python as externally managed, so use a virtual environment:
 
 ```sh
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+npm run dev
+```
+
+```sh
 npm install
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt

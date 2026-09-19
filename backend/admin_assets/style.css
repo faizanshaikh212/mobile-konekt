@@ -1,0 +1,99 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #e9eef7;
+  background: #0e1524;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 980px;
+  margin: auto;
+  padding: 40px 22px;
+}
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.eyebrow {
+  color: #68d5c2;
+  letter-spacing: 0.16em;
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+h1 {
+  margin: 0;
+  font-size: 38px;
+}
+h2 {
+  font-size: 18px;
+  margin: 34px 0 14px;
+}
+.summary {
+  display: flex;
+  gap: 14px;
+  margin-top: 28px;
+}
+.summary div,
+.card,
+pre {
+  background: #172237;
+  border: 1px solid #263654;
+  border-radius: 14px;
+  padding: 18px;
+}
+.summary div {
+  min-width: 190px;
+}
+.summary b {
+  display: block;
+  font-size: 26px;
+}
+.summary span {
+  color: #9eacc3;
+  font-size: 13px;
+}
+button,
+select,
+input {
+  border: 1px solid #3c5479;
+  border-radius: 8px;
+  background: #202f48;
+  color: #fff;
+  padding: 8px 10px;
+}
+button {
+  cursor: pointer;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.card h3 {
+  margin: 0 0 8px;
+}
+.meta {
+  color: #a9b5c8;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+input {
+  width: 100%;
+  margin-top: 8px;
+}
+pre {
+  color: #b9c7dc;
+  white-space: pre-wrap;
+}

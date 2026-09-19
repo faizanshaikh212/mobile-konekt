@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / "release"
 WORK = ROOT / ".build" / "pyinstaller"
@@ -39,7 +38,9 @@ def main() -> None:
         str(WORK),
         "--add-data",
         f"{ROOT / 'dist'}{separator}dist",
-        str(ROOT / "mobile-konekt.py"),
+        "--add-data",
+        f"{ROOT / 'backend' / 'admin_assets'}{separator}backend/admin_assets",
+        str(ROOT / "backend" / "__main__.py"),
     ]
 
     try:

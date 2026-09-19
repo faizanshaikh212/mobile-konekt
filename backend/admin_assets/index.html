@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MobileKonekt Admin</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">HOST CONSOLE</p>
+          <h1>MobileKonekt</h1>
+        </div>
+        <button id="reset">Reset all inputs</button>
+      </header>
+      <section class="summary">
+        <div><b id="count">0</b><span>connected devices</span></div>
+        <div><b id="runtime">—</b><span>admin endpoint</span></div>
+      </section>
+      <section>
+        <h2>Connected devices</h2>
+        <div id="devices" class="grid"></div>
+      </section>
+      <section>
+        <h2>Server & network</h2>
+        <pre id="server">Loading…</pre>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

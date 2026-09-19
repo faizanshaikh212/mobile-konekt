@@ -4,7 +4,7 @@ MobileKonekt turns phones on the local network into Linux virtual gamepads.
 
 ## Run on the host
 
-Build the frontend and Install the frontend and Python dependencies. Arch Linux marks its system
+Build the frontend and install the frontend and Python dependencies. Arch Linux marks its system
 Python as externally managed, so use a virtual environment:
 
 ```sh
@@ -18,7 +18,7 @@ npm install
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 npm run build
-python mobile-konekt.py
+python -m backend
 ```
 
 Open the printed HTTP address on a phone. The backend serves `dist/` on port
@@ -27,33 +27,56 @@ one evdev controller per connected phone, and resets/releases controllers when
 clients disconnect or the server shuts down. If `dist/index.html` is absent,
 the HTTP endpoint returns a useful build instruction instead of failing.
 
+The host-only administration dashboard is served separately at
+`http://127.0.0.1:8090`. It tracks connected phones, labels and assigns player
+slots, disconnects devices, and resets inputs. It is never exposed through the
+phone HTTP/WebSocket services. Override the safe localhost defaults with
+`MOBILEKONEKT_ADMIN_BIND` and `MOBILEKONEKT_ADMIN_PORT`, or
+`python -m backend --admin-bind 127.0.0.1 --admin-port 8090`.
+Do not open port 8090 in UFW; only open 8080/8081 as needed for phone clients.
+For example, allow the phone services only on your LAN interface:
+
+```sh
+sudo ufw allow in on <lan-interface> to any port 8080 proto tcp
+sudo ufw allow in on <lan-interface> to any port 8081 proto tcp
+# No ufw rule is needed for 8090: it is bound to localhost.
+```
+
 The Linux user running the backend needs permission to create `/dev/uinput`.
 Use an appropriate udev rule or run the backend with the permissions required
 by your distribution.
 
 ## Frontend development
 
-Start both the Vite frontend and Python backend together:
+Start the Python backend and open the native Electron admin window:
 
 ```sh
 npm run dev
 ```
 
-Activate the Python environment first so the combined command can find the
-backend dependencies:
+`npm run dev` is the recommended production-like development flow. It
+automatically prefers `.venv/bin/python`, starts the backend, waits for the
+admin service, and opens the Electron desktop window. The phone controller is
+served from the current `dist/` build, so run `npm run build:web` after
+frontend changes.
 
 ```sh
-source .venv/bin/activate
-npm run dev
+npm run dev:web
 ```
 
-The development frontend is available on port 5173. Open
-`http://<your-linux-lan-ip>:5173` on the phone. The Vite page connects to the
-Python WebSocket backend on port 8081 automatically. If you only want one
-process, use `npm run dev:web` or `npm run backend`.
+Use `npm run dev:web` when you specifically want the Vite browser/HMR frontend
+on port 5173. The backend-only command is `npm run backend`. The phone-ready
+production flow serves the built frontend on port 8080 and connects to the
+Python WebSocket backend on port 8081.
 
-For the phone-ready production flow, always run `npm run build` first so the
-backend can serve the generated `dist/` directory.
+The terminal also prints an `Admin dashboard` URL. Open that URL in a browser
+on the Linux PC to manage connected phones. The admin panel is part of the
+Python backend and is not shown to phone users.
+
+For the phone-ready production flow, always run `npm run build:backend` first so
+the backend can serve the generated `dist/` directory. To use the native Linux
+desktop shell during development, run `npm run dev:desktop`; it starts the
+Python backend and opens the host dashboard in Electron.
 
 To create a native Linux executable bundle:
 
@@ -62,14 +85,37 @@ python3 -m pip install -r requirements.txt
 npm run build
 ```
 
-The bundle is written to `release/MobileKonekt/`. Build it on the target
-directory. MobileKonekt targets Linux and uses `evdev` plus `/dev/uinput` to
+This creates both `dist/MobileKonekt-*.AppImage` and
+`dist/mobilekonekt_*_amd64.deb`, in addition to the PyInstaller backend under
+`release/MobileKonekt/`.
+The AppImage is portable; install the `.deb` on Debian/Ubuntu-based systems.
+Build on the target Linux architecture. MobileKonekt targets Linux and uses `evdev` plus `/dev/uinput` to
 create virtual gamepads. The user running the packaged executable must have
 permission to access `/dev/uinput`.
+
+The packaged desktop app is the complete host application: Electron opens the
+admin panel in a native window, starts the bundled Python backend, and the
+backend prints the phone URL in the terminal. Connected phones still use their
+browser to open that phone URL.
+
+Device identity, labels, player assignments, and per-device layout/settings are
+stored as JSON. Development runs use `.dev-data/` at the project root; packaged
+executables use a writable `userdata/` directory beside the executable. These
+directories are intentionally ignored by Git. Phones generate a token in
+`localStorage`, so refreshing or reconnecting restores the same device and its
+preferred player. Layout changes are synchronized to the host when connected,
+with local storage remaining the offline fallback.
 
 ## Project layout
 
 - `src/` — React 19 + TypeScript controller interface and touch/pointer input
 - `backend/controller.py` — evdev virtual gamepad and player-slot management
 - `backend/server.py` — HTTP static-file server and WebSocket protocol
-- `mobile-konekt.py` — small executable backend entrypoint
+- `backend/admin.py` and `backend/admin_assets/` — localhost-only host dashboard
+- `backend/__main__.py` — executable backend module entrypoint
+
+The virtual controller implementation uses Linux `evdev`/`uinput`; creating
+controllers is therefore limited to Linux hosts with `/dev/uinput` permission.
+
+
+`npx electron-builder --linux tar.gz --publish never`

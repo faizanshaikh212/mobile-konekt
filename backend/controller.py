@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from threading import Lock
+from time import time
+from uuid import uuid4
+from .persistence import JsonStore
 
 from evdev import AbsInfo, UInput, ecodes
 
@@ -10,18 +13,29 @@ MAX_PLAYERS = 8
 STICK_DEADZONE = 0.06
 
 BUTTON_CODES = {
-    "A": ecodes.BTN_SOUTH, "B": ecodes.BTN_EAST, "X": ecodes.BTN_WEST,
-    "Y": ecodes.BTN_NORTH, "LB": ecodes.BTN_TL, "RB": ecodes.BTN_TR,
-    "LS": ecodes.BTN_THUMBL, "RS": ecodes.BTN_THUMBR,
-    "L3": ecodes.BTN_THUMBL, "R3": ecodes.BTN_THUMBR,
-    "SELECT": ecodes.BTN_SELECT, "START": ecodes.BTN_START,
-    "HOME": ecodes.BTN_MODE, "UP": ecodes.BTN_DPAD_UP,
-    "DOWN": ecodes.BTN_DPAD_DOWN, "LEFT": ecodes.BTN_DPAD_LEFT,
+    "A": ecodes.BTN_SOUTH,
+    "B": ecodes.BTN_EAST,
+    "X": ecodes.BTN_WEST,
+    "Y": ecodes.BTN_NORTH,
+    "LB": ecodes.BTN_TL,
+    "RB": ecodes.BTN_TR,
+    "LS": ecodes.BTN_THUMBL,
+    "RS": ecodes.BTN_THUMBR,
+    "L3": ecodes.BTN_THUMBL,
+    "R3": ecodes.BTN_THUMBR,
+    "SELECT": ecodes.BTN_SELECT,
+    "START": ecodes.BTN_START,
+    "HOME": ecodes.BTN_MODE,
+    "UP": ecodes.BTN_DPAD_UP,
+    "DOWN": ecodes.BTN_DPAD_DOWN,
+    "LEFT": ecodes.BTN_DPAD_LEFT,
     "RIGHT": ecodes.BTN_DPAD_RIGHT,
 }
 HAT_AXIS = {
-    "LEFT": (ecodes.ABS_HAT0X, -1), "RIGHT": (ecodes.ABS_HAT0X, 1),
-    "UP": (ecodes.ABS_HAT0Y, -1), "DOWN": (ecodes.ABS_HAT0Y, 1),
+    "LEFT": (ecodes.ABS_HAT0X, -1),
+    "RIGHT": (ecodes.ABS_HAT0X, 1),
+    "UP": (ecodes.ABS_HAT0Y, -1),
+    "DOWN": (ecodes.ABS_HAT0Y, 1),
 }
 
 
@@ -44,15 +58,24 @@ class VirtualController:
         capabilities = {
             ecodes.EV_KEY: sorted(set(BUTTON_CODES.values())),
             ecodes.EV_ABS: [
-                (ecodes.ABS_X, _stick_axis()), (ecodes.ABS_Y, _stick_axis()),
-                (ecodes.ABS_RX, _stick_axis()), (ecodes.ABS_RY, _stick_axis()),
-                (ecodes.ABS_Z, _trigger_axis()), (ecodes.ABS_RZ, _trigger_axis()),
-                (ecodes.ABS_HAT0X, _hat_axis()), (ecodes.ABS_HAT0Y, _hat_axis()),
+                (ecodes.ABS_X, _stick_axis()),
+                (ecodes.ABS_Y, _stick_axis()),
+                (ecodes.ABS_RX, _stick_axis()),
+                (ecodes.ABS_RY, _stick_axis()),
+                (ecodes.ABS_Z, _trigger_axis()),
+                (ecodes.ABS_RZ, _trigger_axis()),
+                (ecodes.ABS_HAT0X, _hat_axis()),
+                (ecodes.ABS_HAT0Y, _hat_axis()),
             ],
         }
         self.player = player
-        self.ui = UInput(capabilities, name=f"Phone Controller {player}",
-                         vendor=0x045E, product=0x028E, version=0x0114)
+        self.ui = UInput(
+            capabilities,
+            name=f"Phone Controller {player}",
+            vendor=0x045E,
+            product=0x028E,
+            version=0x0114,
+        )
         self.hat = {ecodes.ABS_HAT0X: 0, ecodes.ABS_HAT0Y: 0}
         self.hat_buttons = set()
         print(f"[+] Controller {player} created ({self.ui.device.path})")
@@ -96,12 +119,18 @@ class VirtualController:
             x, y = float(x), float(y)
         except (TypeError, ValueError, OverflowError):
             return
-        if not all(map(lambda value: value == value and abs(value) != float("inf"), (x, y))):
+        if not all(
+            map(lambda value: value == value and abs(value) != float("inf"), (x, y))
+        ):
             return
         if (x * x + y * y) ** 0.5 < STICK_DEADZONE:
             x = y = 0.0
         x, y = int(max(-1.0, min(1.0, x)) * 32767), int(max(-1.0, min(1.0, y)) * 32767)
-        axes = (ecodes.ABS_X, ecodes.ABS_Y) if name == "LEFT" else (ecodes.ABS_RX, ecodes.ABS_RY)
+        axes = (
+            (ecodes.ABS_X, ecodes.ABS_Y)
+            if name == "LEFT"
+            else (ecodes.ABS_RX, ecodes.ABS_RY)
+        )
         self.ui.write(ecodes.EV_ABS, axes[0], x)
         self.ui.write(ecodes.EV_ABS, axes[1], y)
         self.ui.syn()
@@ -109,8 +138,16 @@ class VirtualController:
     def reset(self):
         for code in set(BUTTON_CODES.values()):
             self.ui.write(ecodes.EV_KEY, code, 0)
-        for axis in (ecodes.ABS_X, ecodes.ABS_Y, ecodes.ABS_RX, ecodes.ABS_RY,
-                     ecodes.ABS_Z, ecodes.ABS_RZ, ecodes.ABS_HAT0X, ecodes.ABS_HAT0Y):
+        for axis in (
+            ecodes.ABS_X,
+            ecodes.ABS_Y,
+            ecodes.ABS_RX,
+            ecodes.ABS_RY,
+            ecodes.ABS_Z,
+            ecodes.ABS_RZ,
+            ecodes.ABS_HAT0X,
+            ecodes.ABS_HAT0Y,
+        ):
             self.ui.write(ecodes.EV_ABS, axis, 0)
         self.hat.update({ecodes.ABS_HAT0X: 0, ecodes.ABS_HAT0Y: 0})
         self.hat_buttons.clear()
@@ -125,23 +162,251 @@ class VirtualController:
 
 
 class ControllerManager:
-    def __init__(self, max_players: int = MAX_PLAYERS):
+    def __init__(self, max_players: int = MAX_PLAYERS, store=None):
         self.max_players = max_players
         self.controllers = {}
+        self.devices = {}
+        self.store = store or JsonStore()
         self._lock = Lock()
 
-    def claim(self):
+    def claim(self, device_id=None, remote="unknown"):
+        old_controller = None
         with self._lock:
-            for player in range(1, self.max_players + 1):
-                if player not in self.controllers:
-                    controller = VirtualController(player)
-                    self.controllers[player] = controller
-                    return player, controller
-        return None, None
+            session_id = device_id or uuid4().hex
+            previous = self.devices.get(session_id)
+            if previous:
+                previous["connected"] = False
+                old_controller = self.controllers.pop(previous["player"], None)
+                self.devices.pop(session_id, None)
+                if previous.get("disconnect"):
+                    previous["disconnect"]()
+        if old_controller:
+            old_controller.close()
+        with self._lock:
+            saved = self.store.get(session_id)
+            preferred = saved.get("player")
+            player = (
+                preferred
+                if isinstance(preferred, int)
+                and 1 <= preferred <= self.max_players
+                and preferred not in self.controllers
+                else None
+            )
+            if player is None:
+                player = next(
+                    (
+                        p
+                        for p in range(1, self.max_players + 1)
+                        if p not in self.controllers
+                    ),
+                    None,
+                )
+            if player is not None:
+                controller = VirtualController(player)
+                self.controllers[player] = controller
+                self.devices[session_id] = {
+                    "id": session_id,
+                    "player": player,
+                    "label": saved.get("label", ""),
+                    "remote": remote,
+                    "connected_at": time(),
+                    "disconnect": None,
+                    "connected": True,
+                    "layout": saved.get("layout"),
+                    "settings": saved.get("settings"),
+                    "websocket": None,
+                }
+                self.store.update(
+                    session_id, player=player, label=self.devices[session_id]["label"]
+                )
+                return player, controller, session_id
+        return None, None, None
 
-    def release(self, player):
+    def set_disconnect_callback(self, session_id, callback):
+        with self._lock:
+            if session_id in self.devices:
+                self.devices[session_id]["disconnect"] = callback
+
+    def set_connection(self, session_id, connection):
+        with self._lock:
+            if session_id in self.devices:
+                self.devices[session_id]["websocket"] = connection
+
+    def set_connected(self, session_id, connected):
+        with self._lock:
+            if session_id in self.devices:
+                self.devices[session_id]["connected"] = connected
+
+    def get_settings(self, session_id):
+        with self._lock:
+            device = self.devices.get(session_id, {})
+            return {"layout": device.get("layout"), "settings": device.get("settings")}
+
+    def save_settings(self, session_id, layout=None, settings=None):
+        with self._lock:
+            device = self.devices.get(session_id)
+            if not device:
+                return False
+            if layout is not None and (
+                not isinstance(layout, dict) or len(layout) > 64
+            ):
+                return False
+            if settings is not None and (
+                not isinstance(settings, dict) or len(settings) > 32
+            ):
+                return False
+            if layout is not None:
+                device["layout"] = layout
+            if settings is not None:
+                device["settings"] = settings
+            values = {
+                "layout": device.get("layout"),
+                "settings": device.get("settings"),
+            }
+        self.store.update(session_id, **values)
+        return True
+
+    def snapshot(self):
+        with self._lock:
+            active = {d["id"] for d in self.devices.values()}
+            public_keys = {
+                "id",
+                "player",
+                "label",
+                "remote",
+                "connected_at",
+                "connected",
+                "layout",
+                "settings",
+            }
+            result = [
+                {key: value for key, value in device.items() if key in public_keys}
+                for device in self.devices.values()
+            ]
+            for token, saved in self.store.snapshot().items():
+                if token not in active:
+                    result.append(
+                        {
+                            "id": token,
+                            "player": saved.get("player"),
+                            "label": saved.get("label", ""),
+                            "remote": "",
+                            "connected_at": 0,
+                            "connected": False,
+                        }
+                    )
+            return result
+
+    def rename(self, session_id, label):
+        with self._lock:
+            device = self.devices.get(session_id)
+            if device is None:
+                if not self.store.get(session_id):
+                    return False
+                self.store.update(session_id, label=label)
+                return True
+            device["label"] = label
+            self.store.update(session_id, label=label)
+            return True
+
+    def assign(self, session_id, player):
+        with self._lock:
+            device = self.devices.get(session_id)
+            if device is None or player < 1 or player > self.max_players:
+                if (
+                    player < 1
+                    or player > self.max_players
+                    or not self.store.get(session_id)
+                ):
+                    return False
+                self.store.update(session_id, player=player)
+                return True
+            old_player = device["player"]
+            other = next(
+                (
+                    item
+                    for item in self.devices.values()
+                    if item["player"] == player and item["id"] != session_id
+                ),
+                None,
+            )
+            controller = self.controllers.pop(old_player)
+            if other is not None:
+                other_controller = self.controllers.pop(player)
+                other_controller.player = old_player
+                self.controllers[old_player] = other_controller
+                other["player"] = old_player
+                self.store.update(other["id"], player=old_player)
+            controller.player = player
+            self.controllers[player] = controller
+            device["player"] = player
+            self.store.update(session_id, player=player)
+            callbacks = [
+                (player, device.get("player_update")),
+                (old_player, other.get("player_update") if other else None),
+            ]
+            for new_player, callback in callbacks:
+                if callback:
+                    callback(new_player)
+            return True
+
+    def disconnect(self, session_id):
+        with self._lock:
+            device = self.devices.get(session_id)
+            callback = device.get("disconnect") if device else None
+            player = device.get("player") if device else None
+            if device:
+                device["connected"] = False
+                device["disconnect"] = None
+        if not device:
+            return False
+        if callback:
+            callback()
+        if player is not None:
+            self.release(player, keep_device=True)
+        return True
+
+    def release_session(self, session_id, connection=None):
+        with self._lock:
+            device = self.devices.get(session_id)
+            if (
+                device
+                and connection is not None
+                and device.get("websocket") is not connection
+            ):
+                return
+            player = device.get("player") if device else None
+        if player is not None:
+            with self._lock:
+                if session_id in self.devices:
+                    self.devices[session_id]["connected"] = False
+                    self.devices[session_id]["disconnect"] = None
+            self.release(player, keep_device=True)
+
+    def set_player_callback(self, session_id, callback):
+        with self._lock:
+            if session_id in self.devices:
+                self.devices[session_id]["player_update"] = callback
+
+    def reset_all(self):
+        with self._lock:
+            controllers = list(self.controllers.values())
+        for controller in controllers:
+            controller.reset()
+
+    def release(self, player, keep_device=False):
         with self._lock:
             controller = self.controllers.pop(player, None)
+            session_id = next(
+                (
+                    key
+                    for key, value in self.devices.items()
+                    if value["player"] == player
+                ),
+                None,
+            )
+            if session_id and not keep_device:
+                self.devices.pop(session_id, None)
         if controller:
             controller.close()
 

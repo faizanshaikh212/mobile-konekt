@@ -3,38 +3,77 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
+  "description": "MobileKonekt Linux host and phone gamepad controller",
+  "author": {
+    "name": "MobileKonekt",
+    "email": "maintainers@mobilekonekt.local"
+  },
+  "homepage": "https://github.com/mobilekonekt/mobilekonekt",
   "scripts": {
-    "dev": "concurrently --kill-others-on-fail --names web,backend \"npm:dev:web\" \"npm:backend\"",
+    "dev": "npm run dev:desktop",
     "dev:web": "vite --host 0.0.0.0",
     "build:web": "tsc -b && vite build",
-    "build": "npm run build:web && python scripts/package.py",
-    "package": "npm run build",
+    "build:backend": "npm run build:web && sh -c 'if [ -x .venv/bin/python ]; then exec .venv/bin/python scripts/package.py; else exec python scripts/package.py; fi'",
+    "build:desktop": "npm run build:backend && electron-builder --linux AppImage deb --publish never",
+    "build": "npm run build:desktop",
+    "package": "npm run build:desktop",
+    "start:desktop": "electron electron/main.cjs",
+    "dev:desktop": "electron electron/main.cjs --dev",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0",
-    "backend": "python mobile-konekt.py"
+    "backend": "sh -c 'if [ -x .venv/bin/python ]; then exec .venv/bin/python -u -m backend; else exec python -u -m backend; fi'"
   },
   "dependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "^8.0.6",
     "@eslint/js": "^10.0.1",
-    "@rolldown/plugin-babel": "^0.2.3",
+    "@rolldown/plugin-babel": "^0.2.4",
     "@types/babel__core": "^7.20.5",
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "concurrently": "^9.2.1",
-    "concurrently": "^10.0.5",
-    "eslint": "^10.10.0",
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3",
+    "eslint": "^10.11.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.6",
+    "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.12.0",
-    "typescript": "~6.0.2",
-    "typescript-eslint": "^8.69.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.0",
     "vite": "^8.3.0"
+  },
+  "build": {
+    "appId": "com.mobilekonekt.desktop",
+    "productName": "MobileKonekt",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "release/MobileKonekt",
+        "to": "backend-bin"
+      }
+    ],
+    "publish": [],
+    "linux": {
+      "category": "Game",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "executableName": "mobilekonekt"
+    }
+  },
+  "allowScripts": {
+    "electron@44.4.3": true,
+    "electron-winstaller@5.4.0": true
   }
 }

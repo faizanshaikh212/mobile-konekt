@@ -12,6 +12,7 @@ function App() {
   const socket = useRef<WebSocket | null>(null);
   const connectRef = useRef<() => void>(() => {});
   const reconnectTimer = useRef<number | undefined>(undefined);
+  const mounted = useRef(false);
   const held = useRef(new Set<string>());
   const wakeLock = useRef<WakeLockSentinel | null>(null);
   const [connection, setConnection] = useState<Connection>("connecting");
@@ -66,6 +67,7 @@ function App() {
     [send, vibrate],
   );
   const connect = useCallback(() => {
+    if (!mounted.current) return;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.hostname}:8081`);
     socket.current = ws;
@@ -114,6 +116,7 @@ function App() {
       }
     };
     ws.onclose = () => {
+      if (!mounted.current || socket.current !== ws) return;
       setConnection("reconnecting");
       setPlayer(null);
       if (!reconnectTimer.current)
@@ -125,12 +128,16 @@ function App() {
     ws.onerror = () => ws.close();
   }, [applyRemote]);
   useEffect(() => {
+    mounted.current = true;
     connectRef.current = connect;
     const initial = window.setTimeout(connect, 0);
     return () => {
       window.clearTimeout(initial);
       if (reconnectTimer.current) window.clearTimeout(reconnectTimer.current);
-      socket.current?.close();
+      reconnectTimer.current = undefined;
+      const activeSocket = socket.current;
+      socket.current = null;
+      activeSocket?.close();
       wakeLock.current?.release().catch(() => {});
     };
   }, [connect]);

@@ -5,7 +5,7 @@ from __future__ import annotations
 from threading import Lock
 from time import time
 from uuid import uuid4
-from .persistence import JsonStore
+from backend.persistence import JsonStore
 
 from evdev import AbsInfo, UInput, ecodes
 

@@ -40,7 +40,7 @@ def main() -> None:
         f"{ROOT / 'dist'}{separator}dist",
         "--add-data",
         f"{ROOT / 'backend' / 'admin_assets'}{separator}backend/admin_assets",
-        str(ROOT / "backend" / "__main__.py"),
+        str(ROOT / "backend_entry.py"),
     ]
 
     try:

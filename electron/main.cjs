@@ -42,7 +42,7 @@ function startBackend() {
     throw new Error(`Bundled backend not found: ${command}`);
   }
   backend = spawn(command, args, {
-    cwd: path.join(__dirname, ".."),
+    cwd: isDevelopment ? path.join(__dirname, "..") : process.resourcesPath,
     stdio: "inherit",
     windowsHide: true,
   });

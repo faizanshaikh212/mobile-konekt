@@ -1,15 +1,16 @@
 {
   "name": "mobilekonekt",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "MobileKonekt Linux host and phone gamepad controller",
   "author": {
-    "name": "MobileKonekt",
-    "email": "maintainers@mobilekonekt.local"
+    "name": "Faizan Shaikh",
+    "email": "shaikhfaizan.dev@gmail.com"
   },
-  "homepage": "https://github.com/mobilekonekt/mobilekonekt",
+  "homepage": "https://github.com/faizanshaikh212/mobile-konekt",
+  "desktopName": "mobilekonekt",
   "scripts": {
     "dev": "npm run dev:desktop",
     "dev:web": "vite --host 0.0.0.0",
@@ -65,9 +66,11 @@
     "publish": [],
     "linux": {
       "category": "Game",
+      "syncDesktopName": true,
       "target": [
         "AppImage",
-        "deb"
+        "deb",
+        "tar.gz"
       ],
       "executableName": "mobilekonekt"
     }

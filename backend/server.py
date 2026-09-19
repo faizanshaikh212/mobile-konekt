@@ -16,8 +16,8 @@ from threading import Thread
 
 import websockets
 
-from .controller import ControllerManager
-from .admin import make_admin_server
+from backend.controller import ControllerManager
+from backend.admin import make_admin_server
 
 HTTP_PORT = 8080
 WEBSOCKET_PORT = 8081

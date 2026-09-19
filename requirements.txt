@@ -1,0 +1,4 @@
+# Runtime dependencies for the Linux backend.
+evdev>=1.7
+websockets>=12
+pyinstaller>=6.0

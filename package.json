@@ -15,7 +15,7 @@
     "dev:web": "vite --host 0.0.0.0",
     "build:web": "tsc -b && vite build",
     "build:backend": "npm run build:web && sh -c 'if [ -x .venv/bin/python ]; then exec .venv/bin/python scripts/package.py; else exec python scripts/package.py; fi'",
-    "build:desktop": "npm run build:backend && electron-builder --linux AppImage deb --publish never",
+    "build:desktop": "npm run build:backend && electron-builder --linux AppImage deb tar.gz --publish never",
     "build": "npm run build:desktop",
     "package": "npm run build:desktop",
     "start:desktop": "electron electron/main.cjs",

@@ -41,7 +41,8 @@ h2 {
 }
 .summary div,
 .card,
-pre {
+pre,
+.connection {
   background: #172237;
   border: 1px solid #263654;
   border-radius: 14px;
@@ -57,6 +58,22 @@ pre {
 .summary span {
   color: #9eacc3;
   font-size: 13px;
+}
+.connection {
+  margin-top: 14px;
+}
+.connection .eyebrow {
+  margin-bottom: 10px;
+}
+.connection h2 {
+  color: #68d5c2;
+  font-size: 28px;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.connection p:last-child {
+  color: #a9b5c8;
+  margin: 0;
 }
 button,
 select,

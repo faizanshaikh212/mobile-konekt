@@ -22,7 +22,14 @@ def _json_body(handler):
     return data
 
 
-def make_admin_server(manager, bind="127.0.0.1", port=8090):
+def make_admin_server(
+    manager,
+    bind="127.0.0.1",
+    port=8090,
+    lan_ip="127.0.0.1",
+    phone_http_port=8080,
+    websocket_port=8081,
+):
     class AdminHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -48,8 +55,10 @@ def make_admin_server(manager, bind="127.0.0.1", port=8090):
                             "platform": platform.platform(),
                             "hostname": socket.gethostname(),
                             "admin": f"{bind}:{port}",
-                            "phone_http": 8080,
-                            "phone_websocket": 8081,
+                            "lan_ip": lan_ip,
+                            "phone_http": phone_http_port,
+                            "phone_websocket": websocket_port,
+                            "phone_url": f"http://{lan_ip}:{phone_http_port}",
                         },
                     },
                 )

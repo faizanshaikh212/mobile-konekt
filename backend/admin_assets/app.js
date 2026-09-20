@@ -21,6 +21,7 @@ async function action(path, data = {}) {
 function render(state) {
   $("#count").textContent = state.devices.length;
   $("#runtime").textContent = state.server.admin;
+  $("#phone-url").textContent = state.server.phone_url;
   $("#server").textContent = JSON.stringify(state.server, null, 2);
   const active = document.activeElement;
   if (active?.matches("[data-label]")) return;

@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog } = require("electron");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -34,6 +34,58 @@ function backendCommand() {
     "MobileKonekt",
   );
   return { command: executable, args: [] };
+}
+
+function terminalCommand() {
+  const backend = backendCommand();
+  const cwd = isDevelopment ? path.join(__dirname, "..") : process.resourcesPath;
+  const commandLine = [backend.command, ...backend.args]
+    .map((part) => `'${String(part).replaceAll("'", "'\\''")}'`)
+    .join(" ");
+  const shellArgs = ["-c", `exec ${commandLine}`];
+  const terminals = [
+    ["x-terminal-emulator", ["-e", "sh", ...shellArgs]],
+    ["gnome-terminal", ["--", "sh", ...shellArgs]],
+    ["konsole", ["-e", "sh", ...shellArgs]],
+    ["xfce4-terminal", ["--command", `sh ${shellArgs.map((arg) => `'${arg.replaceAll("'", "'\\''")}'`).join(" ")}`]],
+    ["kitty", ["sh", ...shellArgs]],
+    ["alacritty", ["-e", "sh", ...shellArgs]],
+  ];
+  return { cwd, terminals };
+}
+
+function openBackendInTerminal() {
+  const { cwd, terminals } = terminalCommand();
+  for (const [command, args] of terminals) {
+    const installed = spawnSync("which", [command], { stdio: "ignore" });
+    if (installed.status !== 0) continue;
+    try {
+      const terminal = spawn(command, args, {
+        cwd,
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      terminal.unref();
+      return true;
+    } catch {}
+  }
+  return false;
+}
+
+async function chooseStartupMode() {
+  const result = await dialog.showMessageBox({
+    type: "question",
+    title: "Start MobileKonekt",
+    message: "How would you like to run MobileKonekt?",
+    detail:
+      "The Electron admin panel is convenient, while terminal mode uses less memory and keeps the backend in a terminal window.",
+    buttons: ["Open Electron admin panel", "Run backend in terminal"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  return result.response === 1 ? "terminal" : "electron";
 }
 
 function startBackend() {
@@ -106,6 +158,16 @@ async function createWindow() {
 app.whenReady().then(async () => {
   try {
     console.log("[desktop] Electron is ready");
+    const mode = await chooseStartupMode();
+    if (mode === "terminal") {
+      if (!openBackendInTerminal()) {
+        throw new Error(
+          "No supported terminal emulator was found. Install x-terminal-emulator, gnome-terminal, Konsole, xfce4-terminal, kitty, or Alacritty.",
+        );
+      }
+      app.quit();
+      return;
+    }
     if (!externalBackend) startBackend();
     await createWindow();
     console.log("[desktop] desktop window created");

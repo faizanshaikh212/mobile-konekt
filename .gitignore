@@ -17,6 +17,7 @@ userdata/
 release/
 .build/
 __pycache__/
+backend/__pycache__/
 *.py[cod]
 
 # Editor directories and files

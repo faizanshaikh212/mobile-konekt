@@ -29,8 +29,9 @@ the HTTP endpoint returns a useful build instruction instead of failing.
 
 The host-only administration dashboard is served separately at
 `http://127.0.0.1:8090`. It tracks connected phones, labels and assigns player
-slots, disconnects devices, and resets inputs. It is never exposed through the
-phone HTTP/WebSocket services. Override the safe localhost defaults with
+slots, disconnects devices, resets inputs, and displays the LAN URL that phones
+should open. It is never exposed through the phone HTTP/WebSocket services.
+Override the safe localhost defaults with
 `MOBILEKONEKT_ADMIN_BIND` and `MOBILEKONEKT_ADMIN_PORT`, or
 `python -m backend --admin-bind 127.0.0.1 --admin-port 8090`.
 Do not open port 8090 in UFW; only open 8080/8081 as needed for phone clients.
@@ -55,10 +56,11 @@ npm run dev
 ```
 
 `npm run dev` is the recommended production-like development flow. It
-automatically prefers `.venv/bin/python`, starts the backend, waits for the
-admin service, and opens the Electron desktop window. The phone controller is
-served from the current `dist/` build, so run `npm run build:web` after
-frontend changes.
+automatically prefers `.venv/bin/python` and shows a startup chooser: open the
+Electron admin panel or run the backend in a terminal. Electron mode starts the
+backend, waits for the admin service, and opens the desktop window. The phone
+controller is served from the current `dist/` build, so run `npm run build:web`
+after frontend changes.
 
 ```sh
 npm run dev:web
@@ -93,10 +95,12 @@ Build on the target Linux architecture. MobileKonekt targets Linux and uses `evd
 create virtual gamepads. The user running the packaged executable must have
 permission to access `/dev/uinput`.
 
-The packaged desktop app is the complete host application: Electron opens the
-admin panel in a native window, starts the bundled Python backend, and the
-backend prints the phone URL in the terminal. Connected phones still use their
-browser to open that phone URL.
+The packaged desktop app is the complete host application. On startup it asks
+whether to open the admin panel in Electron or run the backend in a terminal.
+Terminal mode uses less memory and is useful when the dashboard is not needed;
+Electron mode starts the bundled Python backend and opens the admin panel in a
+native window. Connected phones still use their browser to open the phone URL
+shown in the admin panel or terminal.
 
 Device identity, labels, player assignments, and per-device layout/settings are
 stored as JSON. Development runs use `.dev-data/` at the project root; packaged

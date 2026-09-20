@@ -228,14 +228,22 @@ def main(argv=None):
     args = parser.parse_args(argv)
     manager = ControllerManager()
     http_server = make_http_server()
-    admin_server = make_admin_server(manager, args.admin_bind, args.admin_port)
+    phone_ip = lan_address()
+    admin_server = make_admin_server(
+        manager,
+        args.admin_bind,
+        args.admin_port,
+        lan_ip=phone_ip,
+        phone_http_port=HTTP_PORT,
+        websocket_port=WEBSOCKET_PORT,
+    )
     admin_url = (
         f"http://127.0.0.1:{args.admin_port}"
         if args.admin_bind in ("0.0.0.0", "::")
         else f"http://{args.admin_bind}:{args.admin_port}"
     )
     print("\n  Phone Controller\n  " + "-" * 34)
-    print(f"  Open on your phone : http://{lan_address()}:{HTTP_PORT}")
+    print(f"  Open on your phone : http://{phone_ip}:{HTTP_PORT}")
     print(f"  WebSocket port     : {WEBSOCKET_PORT}")
     print(f"  Admin dashboard    : {admin_url}")
     print("  Open that URL in a browser on this Linux PC to manage devices")

@@ -6,7 +6,6 @@ const path = require("node:path");
 
 const ADMIN_URL = "http://127.0.0.1:8090";
 const isDevelopment = process.argv.includes("--dev") || !app.isPackaged;
-const externalBackend = process.argv.includes("--external-backend");
 let backend;
 let mainWindow;
 let quitting = false;
@@ -41,18 +40,10 @@ function backendCommand() {
   return { command: executable, args: [] };
 }
 
-function terminalCommand() {
-  const backend = backendCommand();
-  backend.args = [...backend.args, "--tui"];
-  const cwd = isDevelopment ? path.join(__dirname, "..") : process.resourcesPath;
-  return { cwd, backend };
-}
-
 function openBackendInTerminal() {
-  const { cwd, backend } = terminalCommand();
-
-  spawn(backend.command, backend.args, {
-    cwd,
+  const { command, args } = backendCommand();
+  spawn(command, [...args, "--tui"], {
+    cwd: isDevelopment ? path.join(__dirname, "..") : process.resourcesPath,
     stdio: "inherit",
     windowsHide: true,
   });
@@ -163,7 +154,7 @@ app.whenReady().then(async () => {
       app.quit();
       return;
     }
-    if (!externalBackend) startBackend();
+    startBackend();
     await createWindow();
     console.log("[desktop] desktop window created");
   } catch (error) {

@@ -20,7 +20,6 @@ import websockets
 from backend.controller import ControllerManager
 from backend.admin import make_admin_server
 from backend.tui import TerminalUI
-from backend.tui import TerminalUI
 
 HTTP_PORT = 8080
 WEBSOCKET_PORT = 8081
@@ -209,11 +208,17 @@ async def serve(http_server, admin_server, manager, websocket_port, stop_signal=
             max_size=4096,
         ):
             while stop_signal is None or not stop_signal.is_set():
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.05)
     finally:
-        http_server.shutdown()
+        shutdown_threads = [
+            Thread(target=http_server.shutdown, daemon=True),
+            Thread(target=admin_server.shutdown, daemon=True),
+        ]
+        for thread in shutdown_threads:
+            thread.start()
+        for thread in shutdown_threads:
+            thread.join(timeout=1)
         http_server.server_close()
-        admin_server.shutdown()
         admin_server.server_close()
         manager.close_all()
 

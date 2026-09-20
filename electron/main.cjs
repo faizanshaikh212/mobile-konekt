@@ -55,6 +55,11 @@ function openBackendInTerminal() {
 }
 
 async function chooseStartupMode() {
+  // Electron can start behind the terminal on Linux. Bring the app to the
+  // foreground before showing the native modal chooser so startup never looks
+  // like it is hanging while waiting for a hidden dialog.
+  console.log("[desktop] showing startup mode chooser");
+  app.focus({ steal: true });
   const result = await dialog.showMessageBox({
     type: "question",
     title: "Start MobileKonekt",
@@ -66,6 +71,9 @@ async function chooseStartupMode() {
     cancelId: 0,
     noLink: true,
   });
+  console.log(
+    `[desktop] startup mode selected: ${result.response === 1 ? "terminal" : "electron"}`,
+  );
   return result.response === 1 ? "terminal" : "electron";
 }
 
@@ -120,10 +128,8 @@ async function waitForAdmin() {
 }
 
 async function createWindow() {
-  console.log(`[desktop] loading admin panel at ${ADMIN_URL}`);
-  await waitForAdmin();
   mainWindow = new BrowserWindow({
-    show: false,
+    show: true,
     width: 1200,
     height: 820,
     minWidth: 900,
@@ -145,6 +151,9 @@ async function createWindow() {
       `[desktop] admin panel failed to load (${code}): ${description}`,
     );
   });
+  console.log(`[desktop] waiting for admin server at ${ADMIN_URL}`);
+  await waitForAdmin();
+  console.log(`[desktop] loading admin panel at ${ADMIN_URL}`);
   await mainWindow.loadURL(ADMIN_URL);
   console.log("[desktop] admin panel loaded");
   mainWindow.show();
@@ -165,6 +174,8 @@ app.whenReady().then(async () => {
       return;
     }
     startBackend();
+    // Create the native window before waiting for Python. This gives users
+    // immediate visual feedback even if backend startup is slow or fails.
     await createWindow();
     console.log("[desktop] desktop window created");
   } catch (error) {

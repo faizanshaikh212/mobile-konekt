@@ -20,6 +20,10 @@ header {
   justify-content: space-between;
   gap: 20px;
 }
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
 .eyebrow {
   color: #68d5c2;
   letter-spacing: 0.16em;
@@ -103,6 +107,13 @@ button.danger {
   color: #a9b5c8;
   font-size: 13px;
   line-height: 1.7;
+}
+.device-status {
+  color: #68d5c2;
+  font-weight: 700;
+}
+.device-offline .device-status {
+  color: #9eacc3;
 }
 .actions {
   display: flex;

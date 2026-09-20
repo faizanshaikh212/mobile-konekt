@@ -69,10 +69,30 @@ class EncryptedStore:
 class JsonStore(EncryptedStore):
     def __init__(self, filename="state.json", root=None):
         super().__init__(filename, root, {"devices": {}})
+        decoded = {}
+        for token, item in self.data.get("devices", {}).items():
+            try:
+                token = self._cipher.decrypt(token.encode()).decode()
+            except (InvalidToken, AttributeError, ValueError):
+                pass
+            decoded[token] = item
+        self.data["devices"] = decoded
         legacy = self.data.pop("layouts", {})
         self.legacy_layouts = legacy if isinstance(legacy, dict) else {}
-        if legacy:
+        if legacy or decoded:
             self.save()
+
+    def save(self):
+        with self._lock:
+            self.root.mkdir(parents=True, exist_ok=True)
+            encoded = {
+                self._cipher.encrypt(token.encode()).decode(): value
+                for token, value in self.data["devices"].items()
+            }
+            payload = json.dumps({"devices": encoded}, indent=2, sort_keys=True)
+            temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+            temporary.write_text(payload, encoding="utf-8")
+            os.replace(temporary, self.path)
 
     def get(self, token):
         with self._lock:
@@ -106,6 +126,16 @@ class JsonStore(EncryptedStore):
 class LayoutStore(EncryptedStore):
     def __init__(self, root=None):
         super().__init__("layouts.json", root, {})
+        self.save()
+
+    def save(self):
+        with self._lock:
+            self.root.mkdir(parents=True, exist_ok=True)
+            temporary = self.path.with_suffix(self.path.suffix + ".tmp")
+            temporary.write_text(
+                json.dumps(self.data, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            os.replace(temporary, self.path)
 
     def save_layout(self, layout_id, layout, device_ref, label):
         with self._lock:

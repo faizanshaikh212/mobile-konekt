@@ -4,7 +4,7 @@ import { Dpad, GameButton, Stick, Trigger } from "./components/Controls";
 import { LayoutControl } from "./components/LayoutControl";
 import { useLayout } from "./hooks/useLayout";
 import { PRESETS } from "./presets";
-import type { Connection } from "./types/controller";
+import type { Connection, Layout } from "./types/controller";
 import { APP_CONFIG } from "./config/appConfig";
 import { getStored, makeDeviceToken, setStored } from "./lib/browserStorage";
 
@@ -22,6 +22,9 @@ function App() {
   const [fullscreen, setFullscreen] = useState(false);
   const [pressed, setPressed] = useState<Set<string>>(new Set());
   const [triggerValues, setTriggerValues] = useState({ LT: 0, RT: 0 });
+  const [layoutId, setLayoutId] = useState("");
+  const [layoutCode, setLayoutCode] = useState("");
+  const [layoutMessage, setLayoutMessage] = useState("");
   const deviceToken = useRef<string>(
     getStored("mobilekonekt-device-token") || makeDeviceToken(),
   );
@@ -44,6 +47,7 @@ function App() {
     applyPreset,
     move,
     applyRemote,
+    applyLayout,
   } = useLayout((value) =>
     send({
       type: "settings",
@@ -52,6 +56,41 @@ function App() {
       settings: { haptics },
     }),
   );
+  const shareLayout = async () => {
+    try {
+      const response = await fetch("/api/layouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ layout }),
+      });
+      if (!response.ok) throw new Error("Unable to publish layout");
+      const data = (await response.json()) as { id?: string };
+      if (!data.id) throw new Error("The server returned no layout number");
+      setLayoutId(data.id);
+      setLayoutMessage("Layout number ready to share.");
+      await navigator.clipboard?.writeText(data.id).catch(() => {});
+    } catch {
+      setLayoutMessage("Connect to the host before sharing a layout.");
+    }
+  };
+  const loadSharedLayout = async () => {
+    const id = layoutCode.trim();
+    if (!/^\d{6}$/.test(id)) {
+      setLayoutMessage("Enter a six-digit layout number.");
+      return;
+    }
+    try {
+      const response = await fetch(`/api/layouts/${id}`);
+      if (!response.ok) throw new Error("Layout not found");
+      const data = (await response.json()) as { layout?: Layout };
+      if (!data.layout) throw new Error("Invalid layout");
+      applyLayout(data.layout);
+      setLayoutId(id);
+      setLayoutMessage("Shared layout loaded.");
+    } catch {
+      setLayoutMessage("That layout number was not found on this host.");
+    }
+  };
   useEffect(() => {
     setStored("mobilekonekt-device-token", deviceToken.current);
   }, []);
@@ -247,6 +286,9 @@ function App() {
               <button className="tool-button save-button" onClick={save}>
                 {APP_CONFIG.toolbar.save}
               </button>
+              <button className="tool-button" onClick={() => void shareLayout()}>
+                Share layout
+              </button>
             </>
           ) : (
             <button className="tool-button edit-button" onClick={startEditing}>
@@ -255,6 +297,29 @@ function App() {
           )}
         </div>
         {editing && <p className="editing-hint">{APP_CONFIG.editing.hint}</p>}
+        <div className="layout-sharing">
+          {layoutId && (
+            <button
+              className="layout-id"
+              title="Copy layout number"
+              onClick={() => void navigator.clipboard?.writeText(layoutId)}
+            >
+              Layout #{layoutId}
+            </button>
+          )}
+          <input
+            value={layoutCode}
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="Enter layout #"
+            aria-label="Shared layout number"
+            onChange={(event) => setLayoutCode(event.target.value.replace(/\D/g, ""))}
+          />
+          <button className="tool-button" onClick={() => void loadSharedLayout()}>
+            Load
+          </button>
+          {layoutMessage && <span>{layoutMessage}</span>}
+        </div>
       </div>
       <section className="deck">
         <div className="center-brand" aria-hidden="true">

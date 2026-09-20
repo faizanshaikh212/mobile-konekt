@@ -25,14 +25,14 @@ class JsonStore:
     def _load(self):
         try:
             value = json.loads(self.path.read_text(encoding="utf-8"))
-            return (
-                value
-                if isinstance(value, dict)
-                and isinstance(value.get("devices", {}), dict)
-                else {"devices": {}}
-            )
+            if not isinstance(value, dict) or not isinstance(value.get("devices", {}), dict):
+                return {"devices": {}, "layouts": {}}
+            value.setdefault("layouts", {})
+            if not isinstance(value["layouts"], dict):
+                value["layouts"] = {}
+            return value
         except (OSError, ValueError, TypeError):
-            return {"devices": {}}
+            return {"devices": {}, "layouts": {}}
 
     def save(self):
         with self._lock:
@@ -71,3 +71,13 @@ class JsonStore:
             del self.data["devices"][token]
             self.save()
             return True
+
+    def save_layout(self, layout_id, layout):
+        with self._lock:
+            self.data.setdefault("layouts", {})[str(layout_id)] = dict(layout)
+            self.save()
+
+    def get_layout(self, layout_id):
+        with self._lock:
+            layout = self.data.setdefault("layouts", {}).get(str(layout_id))
+            return dict(layout) if isinstance(layout, dict) else None

@@ -11,6 +11,7 @@ import sys
 import argparse
 import os
 import signal
+import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -63,7 +64,22 @@ def _valid_input(data):
     return False
 
 
-def make_http_server(dist_dir=DIST_DIR):
+def _valid_layout(layout):
+    if not isinstance(layout, dict) or not layout or len(layout) > 64:
+        return False
+    return all(
+        isinstance(point, dict)
+        and isinstance(point.get("x"), (int, float))
+        and isinstance(point.get("y"), (int, float))
+        and math.isfinite(point["x"])
+        and math.isfinite(point["y"])
+        and 0 <= point["x"] <= 100
+        and 0 <= point["y"] <= 100
+        for point in layout.values()
+    )
+
+
+def make_http_server(dist_dir=DIST_DIR, store=None):
     dist_dir = Path(dist_dir)
 
     class WebHandler(BaseHTTPRequestHandler):
@@ -71,6 +87,20 @@ def make_http_server(dist_dir=DIST_DIR):
 
         def do_GET(self):
             requested = self.path.split("?", 1)[0]
+            if requested.startswith("/api/layouts/"):
+                layout_id = requested.rsplit("/", 1)[-1]
+                layout = store.get_layout(layout_id) if store else None
+                if layout is None:
+                    self.send_error(404, "Layout not found")
+                    return
+                body = json.dumps({"id": layout_id, "layout": layout}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if requested in ("/", "/index.html"):
                 target = dist_dir / "index.html"
                 if target.is_file():
@@ -104,6 +134,32 @@ def make_http_server(dist_dir=DIST_DIR):
                 self.wfile.write(body)
                 return
             self.send_error(404)
+
+        def do_POST(self):
+            if self.path.split("?", 1)[0] != "/api/layouts" or store is None:
+                self.send_error(404)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 16384:
+                    raise ValueError
+                payload = json.loads(self.rfile.read(length) or b"{}")
+                layout = payload.get("layout") if isinstance(payload, dict) else None
+                if not _valid_layout(layout):
+                    raise ValueError
+                layout_id = str(secrets.randbelow(900000) + 100000)
+                while store.get_layout(layout_id) is not None:
+                    layout_id = str(secrets.randbelow(900000) + 100000)
+                store.save_layout(layout_id, layout)
+                body = json.dumps({"id": layout_id}).encode()
+                self.send_response(201)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+            except (ValueError, TypeError, json.JSONDecodeError):
+                self.send_error(400, "Invalid layout")
 
         def log_message(self, *_args):
             return
@@ -240,7 +296,7 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     manager = ControllerManager()
-    http_server = make_http_server()
+    http_server = make_http_server(store=manager.store)
     phone_ip = lan_address()
     admin_server = make_admin_server(
         manager,

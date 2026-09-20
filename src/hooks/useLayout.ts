@@ -42,6 +42,14 @@ export function useLayout(onSave?: (layout: Layout) => void) {
     setLayout(next);
     setDraft(next);
   }, []);
+  const applyLayout = useCallback((value: Layout) => {
+    const next = { ...clone(DEFAULT_LAYOUT), ...value };
+    setStored(STORAGE_KEY, JSON.stringify(next));
+    setLayout(next);
+    setDraft(next);
+    setEditing(false);
+    onSave?.(next);
+  }, [onSave]);
   const reset = useCallback(() => setDraft(clone(DEFAULT_LAYOUT)), []);
   const applyPreset = useCallback((id: string) => {
     const preset = PRESETS.find((item) => item.id === id);
@@ -61,5 +69,6 @@ export function useLayout(onSave?: (layout: Layout) => void) {
     applyPreset,
     move,
     applyRemote,
+    applyLayout,
   };
 }

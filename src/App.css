@@ -147,6 +147,36 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.layout-sharing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+  pointer-events: auto;
+}
+.layout-sharing input,
+.layout-id {
+  color: #b9d4d3;
+  border: 1px solid var(--edge);
+  background: #121a20;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: 10px "DM Mono", monospace;
+}
+.layout-sharing input {
+  width: 112px;
+}
+.layout-id {
+  color: var(--cyan);
+  border-color: #427e7b;
+  cursor: pointer;
+}
+.layout-sharing > span {
+  color: #83aaa9;
+  font: 9px "DM Mono", monospace;
+}
 .deck {
   position: absolute;
   inset: 0;

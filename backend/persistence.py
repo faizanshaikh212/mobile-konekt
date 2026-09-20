@@ -1,12 +1,15 @@
-"""Small, resilient JSON persistence for the host registry."""
+"""Encrypted JSON persistence for host devices and shared layouts."""
 
 from __future__ import annotations
 
 import json
 import os
+import secrets
 import sys
 from pathlib import Path
 from threading import RLock
+
+from cryptography.fernet import Fernet, InvalidToken
 
 
 def data_root() -> Path:
@@ -15,33 +18,61 @@ def data_root() -> Path:
     return Path(__file__).resolve().parent.parent / ".dev-data"
 
 
-class JsonStore:
-    def __init__(self, filename="state.json", root=None):
+class EncryptedStore:
+    def __init__(self, filename, root=None, default=None):
         self.root = Path(root or data_root())
         self.path = self.root / filename
+        self.default = default if default is not None else {}
         self._lock = RLock()
+        self._cipher = Fernet(self._load_key())
         self.data = self._load()
+
+    def _load_key(self):
+        key_path = self.root / ".storage-key"
+        try:
+            key = key_path.read_bytes()
+            Fernet(key)
+            return key
+        except (OSError, ValueError):
+            key = Fernet.generate_key()
+            self.root.mkdir(parents=True, exist_ok=True)
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            fd = os.open(key_path, flags, 0o600)
+            try:
+                os.write(fd, key)
+            finally:
+                os.close(fd)
+            return key
 
     def _load(self):
         try:
-            value = json.loads(self.path.read_text(encoding="utf-8"))
-            if not isinstance(value, dict) or not isinstance(value.get("devices", {}), dict):
-                return {"devices": {}, "layouts": {}}
-            value.setdefault("layouts", {})
-            if not isinstance(value["layouts"], dict):
-                value["layouts"] = {}
-            return value
-        except (OSError, ValueError, TypeError):
-            return {"devices": {}, "layouts": {}}
+            raw = self.path.read_bytes()
+            try:
+                decoded = self._cipher.decrypt(raw)
+                value = json.loads(decoded.decode("utf-8"))
+            except InvalidToken:
+                # One-time migration for the earlier plaintext JSON format.
+                value = json.loads(raw.decode("utf-8"))
+            return value if isinstance(value, type(self.default)) else self.default.copy()
+        except (OSError, ValueError, TypeError, UnicodeDecodeError):
+            return self.default.copy()
 
     def save(self):
         with self._lock:
             self.root.mkdir(parents=True, exist_ok=True)
+            payload = json.dumps(self.data, separators=(",", ":")).encode("utf-8")
             temporary = self.path.with_suffix(self.path.suffix + ".tmp")
-            temporary.write_text(
-                json.dumps(self.data, indent=2, sort_keys=True), encoding="utf-8"
-            )
+            temporary.write_bytes(self._cipher.encrypt(payload))
             os.replace(temporary, self.path)
+
+
+class JsonStore(EncryptedStore):
+    def __init__(self, filename="state.json", root=None):
+        super().__init__(filename, root, {"devices": {}})
+        legacy = self.data.pop("layouts", {})
+        self.legacy_layouts = legacy if isinstance(legacy, dict) else {}
+        if legacy:
+            self.save()
 
     def get(self, token):
         with self._lock:
@@ -64,7 +95,6 @@ class JsonStore:
             }
 
     def delete(self, token):
-        """Remove a device's saved preferences, returning whether it existed."""
         with self._lock:
             if token not in self.data["devices"]:
                 return False
@@ -72,12 +102,56 @@ class JsonStore:
             self.save()
             return True
 
-    def save_layout(self, layout_id, layout):
+
+class LayoutStore(EncryptedStore):
+    def __init__(self, root=None):
+        super().__init__("layouts.json", root, {})
+
+    def save_layout(self, layout_id, layout, device_ref, label):
         with self._lock:
-            self.data.setdefault("layouts", {})[str(layout_id)] = dict(layout)
+            self.data[str(layout_id)] = {
+                "layout": dict(layout),
+                "device_ref": device_ref,
+                "label": label,
+            }
             self.save()
 
     def get_layout(self, layout_id):
         with self._lock:
-            layout = self.data.setdefault("layouts", {}).get(str(layout_id))
-            return dict(layout) if isinstance(layout, dict) else None
+            item = self.data.get(str(layout_id))
+            return dict(item) if isinstance(item, dict) else None
+
+    def update_device(self, device_ref, label):
+        with self._lock:
+            changed = False
+            for item in self.data.values():
+                if isinstance(item, dict) and item.get("device_ref") == device_ref:
+                    item["label"] = label
+                    changed = True
+            if changed:
+                self.save()
+
+    def delete_device(self, device_ref):
+        with self._lock:
+            removed = [
+                layout_id
+                for layout_id, item in self.data.items()
+                if isinstance(item, dict) and item.get("device_ref") == device_ref
+            ]
+            for layout_id in removed:
+                del self.data[layout_id]
+            if removed:
+                self.save()
+
+
+def device_ref(token: str, root=None) -> str:
+    """Return a stable opaque reference for a device token."""
+    import hmac
+    import hashlib
+
+    key_path = Path(root or data_root()) / ".storage-key"
+    try:
+        key = key_path.read_bytes()
+    except OSError:
+        key = b""
+    return hmac.new(key, token.encode("utf-8"), hashlib.sha256).hexdigest()

@@ -12,6 +12,7 @@ import argparse
 import os
 import signal
 import secrets
+import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -19,6 +20,7 @@ from threading import Thread
 import websockets
 
 from backend.controller import ControllerManager
+from backend.persistence import device_ref
 from backend.admin import make_admin_server
 from backend.tui import TerminalUI
 
@@ -64,6 +66,22 @@ def _valid_input(data):
     return False
 
 
+def _device_label(user_agent):
+    if not isinstance(user_agent, str) or not user_agent.strip():
+        return "Mobile device"
+    agent = user_agent[:120]
+    android = re.search(
+        r"Android [^;]+;\s*(?:[a-z]{2}-[A-Z]{2};\s*)?([^;)]+)", agent
+    )
+    if android:
+        return android.group(1).strip()[:64]
+    if "iPhone" in agent:
+        return "iPhone"
+    if "iPad" in agent:
+        return "iPad"
+    return agent[:64]
+
+
 def _valid_layout(layout):
     if not isinstance(layout, dict) or not layout or len(layout) > 64:
         return False
@@ -89,11 +107,11 @@ def make_http_server(dist_dir=DIST_DIR, store=None):
             requested = self.path.split("?", 1)[0]
             if requested.startswith("/api/layouts/"):
                 layout_id = requested.rsplit("/", 1)[-1]
-                layout = store.get_layout(layout_id) if store else None
-                if layout is None:
+                record = store.get_layout(layout_id) if store else None
+                if record is None:
                     self.send_error(404, "Layout not found")
                     return
-                body = json.dumps({"id": layout_id, "layout": layout}).encode()
+                body = json.dumps({"id": layout_id, "layout": record["layout"]}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
@@ -145,12 +163,16 @@ def make_http_server(dist_dir=DIST_DIR, store=None):
                     raise ValueError
                 payload = json.loads(self.rfile.read(length) or b"{}")
                 layout = payload.get("layout") if isinstance(payload, dict) else None
+                device_id = payload.get("device_id", "")
+                label = payload.get("label", "Mobile device")
                 if not _valid_layout(layout):
                     raise ValueError
                 layout_id = str(secrets.randbelow(900000) + 100000)
                 while store.get_layout(layout_id) is not None:
                     layout_id = str(secrets.randbelow(900000) + 100000)
-                store.save_layout(layout_id, layout)
+                store.save_layout(
+                    layout_id, layout, device_ref(device_id, store.root), label
+                )
                 body = json.dumps({"id": layout_id}).encode()
                 self.send_response(201)
                 self.send_header("Content-Type", "application/json")
@@ -192,7 +214,9 @@ async def websocket_handler(websocket, manager):
                 else None
             )
             player, controller, session_id = manager.claim(
-                device_id=token, remote=str(remote)
+                device_id=token,
+                remote=str(remote),
+                label=_device_label(hello.get("device_name")) if hello else "Mobile device",
             )
         except PermissionError:
             await websocket.send(
@@ -296,7 +320,7 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     manager = ControllerManager()
-    http_server = make_http_server(store=manager.store)
+    http_server = make_http_server(store=manager.layout_store)
     phone_ip = lan_address()
     admin_server = make_admin_server(
         manager,

@@ -109,9 +109,10 @@ native window. Connected phones still use their browser to open the phone URL
 shown in the admin panel or terminal.
 
 Device identity, labels, player assignments, and per-device layout/settings are
-stored as JSON. Development runs use `.dev-data/` at the project root; packaged
-executables use a writable `userdata/` directory beside the executable. These
-directories are intentionally ignored by Git. Phones generate a token in
+stored in encrypted `state.json`; shared layouts are stored separately in
+encrypted `layouts.json`. Development runs use `.dev-data/` at the project root;
+packaged executables use a writable `userdata/` directory beside the executable.
+These directories are intentionally ignored by Git. Phones generate a token in
 `localStorage`, so refreshing or reconnecting restores the same device and its
 preferred player. Layout changes are synchronized to the host when connected,
 with local storage remaining the offline fallback. While editing a controller,

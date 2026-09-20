@@ -5,7 +5,7 @@ from __future__ import annotations
 from threading import Lock
 from time import time
 from uuid import uuid4
-from backend.persistence import JsonStore
+from backend.persistence import JsonStore, LayoutStore, device_ref
 
 from evdev import AbsInfo, UInput, ecodes
 
@@ -167,9 +167,15 @@ class ControllerManager:
         self.controllers = {}
         self.devices = {}
         self.store = store or JsonStore()
+        self.layout_store = LayoutStore(root=self.store.root)
+        for layout_id, layout in self.store.legacy_layouts.items():
+            if isinstance(layout, dict) and "layout" not in layout:
+                self.layout_store.save_layout(
+                    layout_id, layout, "", "Mobile device"
+                )
         self._lock = Lock()
 
-    def claim(self, device_id=None, remote="unknown"):
+    def claim(self, device_id=None, remote="unknown", label="Mobile device"):
         old_controller = None
         with self._lock:
             session_id = device_id or uuid4().hex
@@ -207,7 +213,7 @@ class ControllerManager:
                 self.devices[session_id] = {
                     "id": session_id,
                     "player": player,
-                    "label": saved.get("label", ""),
+                    "label": saved.get("label") or label,
                     "remote": remote,
                     "connected_at": time(),
                     "disconnect": None,
@@ -217,7 +223,9 @@ class ControllerManager:
                     "websocket": None,
                 }
                 self.store.update(
-                    session_id, player=player, label=self.devices[session_id]["label"]
+                    session_id,
+                    player=player,
+                    label=self.devices[session_id]["label"],
                 )
                 return player, controller, session_id
         return None, None, None
@@ -304,9 +312,11 @@ class ControllerManager:
                 if not self.store.get(session_id):
                     return False
                 self.store.update(session_id, label=label)
+                self.layout_store.update_device(device_ref(session_id, self.store.root), label)
                 return True
             device["label"] = label
             self.store.update(session_id, label=label)
+            self.layout_store.update_device(device_ref(session_id, self.store.root), label)
             return True
 
     def delete_device_data(self, session_id):
@@ -322,6 +332,7 @@ class ControllerManager:
             callback()
         if player is not None:
             self.release(player, keep_device=False)
+        self.layout_store.delete_device(device_ref(session_id, self.store.root))
         return self.store.delete(session_id) or device is not None
 
     def assign(self, session_id, player):

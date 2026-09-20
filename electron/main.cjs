@@ -42,10 +42,14 @@ function backendCommand() {
 
 function openBackendInTerminal() {
   const { command, args } = backendCommand();
-  spawn(command, [...args, "--tui"], {
+  const child = spawn(command, [...args, "--tui"], {
     cwd: isDevelopment ? path.join(__dirname, "..") : process.resourcesPath,
     stdio: "inherit",
     windowsHide: true,
+  });
+  child.once("error", (error) => {
+    console.error("[desktop] terminal backend failed to start", error);
+    dialog.showErrorBox("MobileKonekt terminal failed", error.message);
   });
   return true;
 }
@@ -77,6 +81,12 @@ function startBackend() {
   });
   backend.once("exit", (code, signal) => {
     console.log(`[desktop] backend exited (${code ?? "null"}${signal ? `, ${signal}` : ""})`);
+    if (code && !quitting) {
+      dialog.showErrorBox(
+        "MobileKonekt backend stopped",
+        `The backend exited with code ${code}. Check the terminal output for details.`,
+      );
+    }
     backend = undefined;
   });
   backend.once("error", (error) => {

@@ -61,7 +61,11 @@ function App() {
       const response = await fetch("/api/layouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ layout }),
+        body: JSON.stringify({
+          layout,
+          device_id: deviceToken.current,
+          label: navigator.userAgent.slice(0, 120),
+        }),
       });
       if (!response.ok) throw new Error("Unable to publish layout");
       const data = (await response.json()) as { id?: string };
@@ -113,7 +117,11 @@ function App() {
     setConnection("connecting");
     ws.onopen = () => {
       ws.send(
-        JSON.stringify({ type: "handshake", token: deviceToken.current }),
+        JSON.stringify({
+          type: "handshake",
+          token: deviceToken.current,
+          device_name: navigator.userAgent.slice(0, 120),
+        }),
       );
       setConnection("connected");
       setError("");

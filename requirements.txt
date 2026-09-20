@@ -2,3 +2,4 @@
 evdev>=1.7
 websockets>=12
 pyinstaller>=6.0
+cryptography>=42

@@ -4,7 +4,7 @@ import { Dpad, GameButton, Stick, Trigger } from "./components/Controls";
 import { LayoutControl } from "./components/LayoutControl";
 import { useLayout } from "./hooks/useLayout";
 import { PRESETS } from "./presets";
-import type { Connection, Layout } from "./types/controller";
+import type { Connection, GridMode, Layout } from "./types/controller";
 import { APP_CONFIG } from "./config/appConfig";
 import { getStored, makeDeviceToken, setStored } from "./lib/browserStorage";
 
@@ -25,6 +25,12 @@ function App() {
   const [layoutId, setLayoutId] = useState("");
   const [layoutCode, setLayoutCode] = useState("");
   const [layoutMessage, setLayoutMessage] = useState("");
+  const [grid, setGrid] = useState<GridMode>(() => {
+    const saved = getStored("mobilekonekt-layout-grid");
+    return saved === "32" || saved === "16" || saved === "8" || saved === "4"
+      ? saved
+      : "none";
+  });
   const deviceToken = useRef<string>(
     getStored("mobilekonekt-device-token") || makeDeviceToken(),
   );
@@ -228,6 +234,10 @@ function App() {
   };
   const stick = (name: "LEFT" | "RIGHT", x: number, y: number) =>
     send({ type: "stick", stick: name, x, y });
+  const changeGrid = (value: GridMode) => {
+    setGrid(value);
+    setStored("mobilekonekt-layout-grid", value);
+  };
 
   return (
     <main
@@ -288,6 +298,18 @@ function App() {
                   </option>
                 ))}
               </select>
+              <select
+                className="preset-select grid-select"
+                aria-label="Grid"
+                value={grid}
+                onChange={(event) => changeGrid(event.target.value as GridMode)}
+              >
+                <option value="none">Grid: none</option>
+                <option value="32">Grid: 32×</option>
+                <option value="16">Grid: 16×</option>
+                <option value="8">Grid: 8×</option>
+                <option value="4">Grid: 4×</option>
+              </select>
               <button className="tool-button" onClick={reset}>
                 {APP_CONFIG.toolbar.reset}
               </button>
@@ -329,7 +351,7 @@ function App() {
           {layoutMessage && <span>{layoutMessage}</span>}
         </div>
       </div>
-      <section className="deck">
+      <section className={`deck ${editing ? `grid-${grid}` : "grid-none"}`}>
         <div className="center-brand" aria-hidden="true">
           <strong>{APP_CONFIG.centerLabel}</strong>
           <span>
@@ -469,6 +491,7 @@ function App() {
             point={layout[id]}
             editing={editing}
             onMove={move}
+            grid={grid}
             className={`control-${id}`}
           >
             {control}

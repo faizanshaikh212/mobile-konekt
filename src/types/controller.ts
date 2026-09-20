@@ -24,3 +24,4 @@ export type ControlId =
 
 export type Point = { x: number; y: number };
 export type Layout = Record<ControlId, Point>;
+export type GridMode = "none" | "32" | "16" | "8" | "4";

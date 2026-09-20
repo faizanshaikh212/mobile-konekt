@@ -168,6 +168,9 @@ class ControllerManager:
         self.devices = {}
         self.store = store or JsonStore()
         self.layout_store = LayoutStore(root=self.store.root)
+        self.layout_store.sync_device_labels(
+            self.store.snapshot(), root=self.store.root
+        )
         for layout_id, layout in self.store.legacy_layouts.items():
             if isinstance(layout, dict) and "layout" not in layout:
                 self.layout_store.save_layout(

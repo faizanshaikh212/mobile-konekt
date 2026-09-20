@@ -156,6 +156,26 @@ class LayoutStore(EncryptedStore):
             changed = False
             for item in self.data.values():
                 if isinstance(item, dict) and item.get("device_ref") == device_ref:
+                    if item.get("label") != label:
+                        item["label"] = label
+                        changed = True
+            if changed:
+                self.save()
+
+    def sync_device_labels(self, devices, root=None):
+        """Replace stale client-supplied labels with server-owned labels."""
+        with self._lock:
+            labels = {
+                device_ref(token, root): item.get("label")
+                for token, item in devices.items()
+                if isinstance(item, dict) and isinstance(item.get("label"), str)
+            }
+            changed = False
+            for item in self.data.values():
+                if not isinstance(item, dict):
+                    continue
+                label = labels.get(item.get("device_ref"))
+                if label and item.get("label") != label:
                     item["label"] = label
                     changed = True
             if changed:

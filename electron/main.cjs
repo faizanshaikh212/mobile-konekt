@@ -8,6 +8,7 @@ const ADMIN_URL = "http://127.0.0.1:8090";
 const isDevelopment = process.argv.includes("--dev") || !app.isPackaged;
 let backend;
 let mainWindow;
+let startupWindow;
 let quitting = false;
 
 // The admin panel does not need GPU compositing. Avoid initializing the GPU
@@ -55,26 +56,48 @@ function openBackendInTerminal() {
 }
 
 async function chooseStartupMode() {
-  // Electron can start behind the terminal on Linux. Bring the app to the
-  // foreground before showing the native modal chooser so startup never looks
-  // like it is hanging while waiting for a hidden dialog.
   console.log("[desktop] showing startup mode chooser");
-  app.focus({ steal: true });
-  const result = await dialog.showMessageBox({
-    type: "question",
+  startupWindow = new BrowserWindow({
+    width: 520,
+    height: 250,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
     title: "Start MobileKonekt",
-    message: "How would you like to run MobileKonekt?",
-    detail:
-      "The Electron admin panel is convenient, while terminal mode uses less memory and keeps the backend in a terminal window.",
-    buttons: ["Open Electron admin panel", "Run backend in terminal"],
-    defaultId: 0,
-    cancelId: 0,
-    noLink: true,
+    alwaysOnTop: true,
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  console.log(
-    `[desktop] startup mode selected: ${result.response === 1 ? "terminal" : "electron"}`,
+  await startupWindow.loadURL(
+    `data:text/html;charset=utf-8,${encodeURIComponent(`
+      <html><body style="font:16px sans-serif;padding:24px;background:#111827;color:#f9fafb">
+        <h2>Start MobileKonekt</h2>
+        <p>Choose how to run the host application.</p>
+        <button onclick="location.href='mobilekonekt:electron'" style="padding:10px;margin-right:8px">Open Electron admin panel</button>
+        <button onclick="location.href='mobilekonekt:terminal'" style="padding:10px">Run in terminal</button>
+      </body></html>
+    `)}`,
   );
-  return result.response === 1 ? "terminal" : "electron";
+  return new Promise((resolve) => {
+    const select = (event, url) => {
+      if (!url.startsWith("mobilekonekt:")) return;
+      event.preventDefault();
+      const mode = url.endsWith("terminal") ? "terminal" : "electron";
+      console.log(`[desktop] startup mode selected: ${mode}`);
+      startupWindow.close();
+      startupWindow = undefined;
+      resolve(mode);
+    };
+    startupWindow.webContents.on("will-navigate", select);
+    startupWindow.on("closed", () => {
+      if (startupWindow) {
+        startupWindow = undefined;
+        resolve("electron");
+      }
+    });
+    startupWindow.show();
+    startupWindow.focus();
+  });
 }
 
 function startBackend() {

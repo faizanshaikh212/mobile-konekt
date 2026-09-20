@@ -1,11 +1,12 @@
 import { useRef, type PointerEvent, type ReactNode } from "react";
-import type { ControlId, Point } from "../types/controller";
+import type { ControlId, GridMode, Point } from "../types/controller";
 
 type Props = {
   id: ControlId;
   point: Point;
   editing: boolean;
   onMove: (id: ControlId, point: Point) => void;
+  grid?: GridMode;
   className?: string;
   children: ReactNode;
 };
@@ -15,6 +16,7 @@ export function LayoutControl({
   point,
   editing,
   onMove,
+  grid = "none",
   className = "",
   children,
 }: Props) {
@@ -29,7 +31,7 @@ export function LayoutControl({
     )
       return;
     const rect = ref.current.parentElement.getBoundingClientRect();
-    onMove(id, {
+    const raw = {
       x: Math.max(
         4,
         Math.min(
@@ -44,7 +46,17 @@ export function LayoutControl({
           ((event.clientY - rect.top - offset.current.y) / rect.height) * 100,
         ),
       ),
-    });
+    };
+    const divisions = grid === "none" ? 0 : Number(grid);
+    onMove(
+      id,
+      divisions
+        ? {
+            x: Math.max(4, Math.min(96, Math.round(raw.x / (100 / divisions)) * (100 / divisions))),
+            y: Math.max(5, Math.min(95, Math.round(raw.y / (100 / divisions)) * (100 / divisions))),
+          }
+        : raw,
+    );
   };
   const end = () => {
     pointer.current = null;

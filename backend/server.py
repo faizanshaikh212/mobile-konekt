@@ -97,7 +97,7 @@ def _valid_layout(layout):
     )
 
 
-def make_http_server(dist_dir=DIST_DIR, store=None):
+def make_http_server(dist_dir=DIST_DIR, store=None, device_store=None):
     dist_dir = Path(dist_dir)
 
     class WebHandler(BaseHTTPRequestHandler):
@@ -165,6 +165,9 @@ def make_http_server(dist_dir=DIST_DIR, store=None):
                 layout = payload.get("layout") if isinstance(payload, dict) else None
                 device_id = payload.get("device_id", "")
                 label = payload.get("label", "Mobile device")
+                if device_store is not None:
+                    saved_device = device_store.get(device_id)
+                    label = saved_device.get("label") or label
                 if not _valid_layout(layout):
                     raise ValueError
                 layout_id = str(secrets.randbelow(900000) + 100000)
@@ -320,7 +323,9 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     manager = ControllerManager()
-    http_server = make_http_server(store=manager.layout_store)
+    http_server = make_http_server(
+        store=manager.layout_store, device_store=manager.store
+    )
     phone_ip = lan_address()
     admin_server = make_admin_server(
         manager,

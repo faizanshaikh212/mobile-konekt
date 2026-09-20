@@ -22,6 +22,6 @@ export type ControlId =
   | "rs"
   | "right-stick";
 
-export type Point = { x: number; y: number };
+export type Point = { x: number; y: number; scale?: number };
 export type Layout = Record<ControlId, Point>;
-export type GridMode = "none" | "32" | "16" | "8" | "4";
+export type GridMode = "none" | "64" | "32" | "16" | "8";

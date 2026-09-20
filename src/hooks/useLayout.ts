@@ -6,7 +6,10 @@ import { getStored, setStored } from "../lib/browserStorage";
 const STORAGE_KEY = "mobilekonekt-controller-layout-v4";
 const clone = (layout: Layout): Layout =>
   Object.fromEntries(
-    Object.entries(layout).map(([id, point]) => [id, { ...point }]),
+    Object.entries(layout).map(([id, point]) => [
+      id,
+      { ...point, scale: point.scale ?? 1 },
+    ]),
   ) as Layout;
 
 function readLayout(): Layout {
@@ -57,7 +60,18 @@ export function useLayout(onSave?: (layout: Layout) => void) {
   }, []);
   const move = useCallback(
     (id: ControlId, point: Point) =>
-      setDraft((current) => ({ ...current, [id]: point })),
+      setDraft((current) => ({
+        ...current,
+        [id]: { ...current[id], ...point },
+      })),
+    [],
+  );
+  const resize = useCallback(
+    (id: ControlId, scale: number) =>
+      setDraft((current) => ({
+        ...current,
+        [id]: { ...current[id], scale },
+      })),
     [],
   );
   return {
@@ -68,6 +82,7 @@ export function useLayout(onSave?: (layout: Layout) => void) {
     reset,
     applyPreset,
     move,
+    resize,
     applyRemote,
     applyLayout,
   };

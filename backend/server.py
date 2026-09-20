@@ -91,6 +91,14 @@ def _valid_layout(layout):
         and isinstance(point.get("y"), (int, float))
         and math.isfinite(point["x"])
         and math.isfinite(point["y"])
+        and (
+            "scale" not in point
+            or (
+                isinstance(point["scale"], (int, float))
+                and math.isfinite(point["scale"])
+                and 0.5 <= point["scale"] <= 2
+            )
+        )
         and 0 <= point["x"] <= 100
         and 0 <= point["y"] <= 100
         for point in layout.values()
@@ -99,6 +107,12 @@ def _valid_layout(layout):
 
 def make_http_server(dist_dir=DIST_DIR, store=None, device_store=None):
     dist_dir = Path(dist_dir)
+
+    def write_body(handler, body):
+        try:
+            handler.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            return
 
     class WebHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -117,7 +131,7 @@ def make_http_server(dist_dir=DIST_DIR, store=None, device_store=None):
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self.wfile.write(body)
+                write_body(self, body)
                 return
             if requested in ("/", "/index.html"):
                 target = dist_dir / "index.html"
@@ -134,7 +148,7 @@ def make_http_server(dist_dir=DIST_DIR, store=None, device_store=None):
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self.wfile.write(body)
+                write_body(self, body)
                 return
             relative = requested.lstrip("/")
             target = (dist_dir / relative).resolve()
@@ -149,7 +163,7 @@ def make_http_server(dist_dir=DIST_DIR, store=None, device_store=None):
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
-                self.wfile.write(body)
+                write_body(self, body)
                 return
             self.send_error(404)
 
@@ -182,7 +196,7 @@ def make_http_server(dist_dir=DIST_DIR, store=None, device_store=None):
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self.wfile.write(body)
+                write_body(self, body)
             except (ValueError, TypeError, json.JSONDecodeError):
                 self.send_error(400, "Invalid layout")
 
@@ -286,6 +300,7 @@ async def serve(http_server, admin_server, manager, websocket_port, stop_signal=
             lambda ws, path=None: websocket_handler(ws, manager),
             "0.0.0.0",
             WEBSOCKET_PORT,
+            compression=None,
             ping_interval=15,
             ping_timeout=15,
             max_size=4096,

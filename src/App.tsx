@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import "./App.css";
 import { Dpad, GameButton, Stick, Trigger } from "./components/Controls";
 import { LayoutControl } from "./components/LayoutControl";
@@ -14,6 +14,8 @@ function App() {
   const reconnectTimer = useRef<number | undefined>(undefined);
   const mounted = useRef(false);
   const held = useRef(new Set<string>());
+  const analogQueue = useRef<Record<string, Record<string, unknown>>>({});
+  const analogFrame = useRef<number | null>(null);
   const wakeLock = useRef<WakeLockSentinel | null>(null);
   const [connection, setConnection] = useState<Connection>("connecting");
   const [player, setPlayer] = useState<number | null>(null);
@@ -27,10 +29,12 @@ function App() {
   const [layoutMessage, setLayoutMessage] = useState("");
   const [grid, setGrid] = useState<GridMode>(() => {
     const saved = getStored("mobilekonekt-layout-grid");
-    return saved === "32" || saved === "16" || saved === "8" || saved === "4"
+    return saved === "64" || saved === "32" || saved === "16" || saved === "8"
       ? saved
       : "none";
   });
+  const deckRef = useRef<HTMLElement>(null);
+  const [gridStep, setGridStep] = useState({ x: 0, y: 0 });
   const deviceToken = useRef<string>(
     getStored("mobilekonekt-device-token") || makeDeviceToken(),
   );
@@ -44,6 +48,20 @@ function App() {
     if (socket.current?.readyState === WebSocket.OPEN)
       socket.current.send(JSON.stringify(message));
   }, []);
+  const flushAnalog = useCallback(() => {
+    analogFrame.current = null;
+    const queued = analogQueue.current;
+    analogQueue.current = {};
+    Object.values(queued).forEach(send);
+  }, [send]);
+  const sendAnalog = useCallback(
+    (key: string, message: Record<string, unknown>) => {
+      analogQueue.current[key] = message;
+      if (analogFrame.current === null)
+        analogFrame.current = window.requestAnimationFrame(flushAnalog);
+    },
+    [flushAnalog],
+  );
   const {
     layout,
     editing,
@@ -52,6 +70,7 @@ function App() {
     reset,
     applyPreset,
     move,
+    resize,
     applyRemote,
     applyLayout,
   } = useLayout((value) =>
@@ -192,6 +211,10 @@ function App() {
       socket.current = null;
       activeSocket?.close();
       wakeLock.current?.release().catch(() => {});
+      if (analogFrame.current !== null)
+        window.cancelAnimationFrame(analogFrame.current);
+      analogFrame.current = null;
+      analogQueue.current = {};
     };
   }, [connect]);
   useEffect(() => {
@@ -201,6 +224,7 @@ function App() {
       );
       held.current.clear();
       setPressed(new Set());
+      analogQueue.current = {};
       send({ type: "trigger", trigger: "LT", value: 0 });
       send({ type: "trigger", trigger: "RT", value: 0 });
       send({ type: "stick", stick: "LEFT", x: 0, y: 0 });
@@ -228,16 +252,29 @@ function App() {
     else await document.documentElement.requestFullscreen?.();
     setFullscreen(Boolean(document.fullscreenElement));
   };
-  const trigger = (name: "LT" | "RT", value: number) => {
+  const trigger = useCallback((name: "LT" | "RT", value: number) => {
     setTriggerValues((current) => ({ ...current, [name]: value }));
-    send({ type: "trigger", trigger: name, value });
-  };
-  const stick = (name: "LEFT" | "RIGHT", x: number, y: number) =>
-    send({ type: "stick", stick: name, x, y });
+    sendAnalog(`trigger:${name}`, { type: "trigger", trigger: name, value });
+  }, [sendAnalog]);
+  const stick = useCallback((name: "LEFT" | "RIGHT", x: number, y: number) => {
+    sendAnalog(`stick:${name}`, { type: "stick", stick: name, x, y });
+  }, [sendAnalog]);
   const changeGrid = (value: GridMode) => {
     setGrid(value);
     setStored("mobilekonekt-layout-grid", value);
   };
+  useEffect(() => {
+    const deck = deckRef.current;
+    if (!deck) return;
+    const update = () => {
+      const rect = deck.getBoundingClientRect();
+      setGridStep({ x: 100 / Number(grid || 1), y: (rect.width / rect.height) * (100 / Number(grid || 1)) });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(deck);
+    return () => observer.disconnect();
+  }, [grid]);
 
   return (
     <main
@@ -305,10 +342,10 @@ function App() {
                 onChange={(event) => changeGrid(event.target.value as GridMode)}
               >
                 <option value="none">Grid: none</option>
+                <option value="64">Grid: 64×</option>
                 <option value="32">Grid: 32×</option>
                 <option value="16">Grid: 16×</option>
                 <option value="8">Grid: 8×</option>
-                <option value="4">Grid: 4×</option>
               </select>
               <button className="tool-button" onClick={reset}>
                 {APP_CONFIG.toolbar.reset}
@@ -351,7 +388,16 @@ function App() {
           {layoutMessage && <span>{layoutMessage}</span>}
         </div>
       </div>
-      <section className={`deck ${editing ? `grid-${grid}` : "grid-none"}`}>
+      <section
+        ref={deckRef}
+        className={`deck ${editing ? `grid-${grid}` : "grid-none"}`}
+        style={
+          {
+            "--grid-x-step": `${gridStep.x}%`,
+            "--grid-y-step": `${gridStep.y}%`,
+          } as CSSProperties
+        }
+      >
         <div className="center-brand" aria-hidden="true">
           <strong>{APP_CONFIG.centerLabel}</strong>
           <span>
@@ -491,6 +537,8 @@ function App() {
             point={layout[id]}
             editing={editing}
             onMove={move}
+            onResize={resize}
+            gridStep={gridStep}
             grid={grid}
             className={`control-${id}`}
           >

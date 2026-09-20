@@ -42,7 +42,12 @@ def make_admin_server(
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                # Browsers can cancel an asset request while a window is
+                # closing or navigating; there is nothing left to send.
+                return
 
         def do_GET(self):
             path = self.path.split("?", 1)[0]

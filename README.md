@@ -120,6 +120,12 @@ with local storage remaining the offline fallback. While editing a controller,
 use **Share layout** to publish the current layout and receive a six-digit
 layout number. Share that number with another phone on the same host, where it
 can be entered and loaded from the layout-sharing controls.
+The editor also supports square-cell **64×, 32×, 16×, and 8× grids** (or no
+grid); dragging snaps controls to the selected grid. Use the resize handle on
+an editing control to scale it, and saved/shared layouts preserve those sizes.
+The admin panel also detects connected physical evdev gamepads (for example an
+EvoFox pad) and lists them beside phones. Physical pads can be assigned an
+unused player number; the app leaves their native input handling untouched.
 
 ## Project layout
 

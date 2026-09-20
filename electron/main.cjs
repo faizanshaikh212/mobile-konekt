@@ -9,6 +9,8 @@ const isDevelopment = process.argv.includes("--dev") || !app.isPackaged;
 let backend;
 let mainWindow;
 let startupWindow;
+let terminalMode = false;
+let starting = true;
 let quitting = false;
 
 // The admin panel does not need GPU compositing. Avoid initializing the GPU
@@ -43,16 +45,42 @@ function backendCommand() {
 
 function openBackendInTerminal() {
   const { command, args } = backendCommand();
-  const child = spawn(command, [...args, "--tui"], {
+  backend = spawn(command, [...args, "--tui"], {
     cwd: isDevelopment ? path.join(__dirname, "..") : process.resourcesPath,
     stdio: "inherit",
     windowsHide: true,
   });
-  child.once("error", (error) => {
+  terminalMode = true;
+  console.log("[desktop] terminal backend started");
+  backend.once("error", (error) => {
     console.error("[desktop] terminal backend failed to start", error);
     dialog.showErrorBox("MobileKonekt terminal failed", error.message);
+    quitting = true;
+    app.quit();
+  });
+  backend.once("exit", (code) => {
+    backend = undefined;
+    if (!quitting) {
+      console.log(`[desktop] terminal backend exited (${code ?? "null"})`);
+      quitting = true;
+      app.quit();
+    }
   });
   return true;
+}
+
+function probeAdmin() {
+  return new Promise((resolve) => {
+    const request = http.get(`${ADMIN_URL}/api/state`, (response) => {
+      response.resume();
+      resolve(response.statusCode >= 200 && response.statusCode < 400);
+    });
+    request.setTimeout(250, () => {
+      request.destroy();
+      resolve(false);
+    });
+    request.on("error", () => resolve(false));
+  });
 }
 
 async function chooseStartupMode() {
@@ -84,6 +112,8 @@ async function chooseStartupMode() {
       event.preventDefault();
       const mode = url.endsWith("terminal") ? "terminal" : "electron";
       console.log(`[desktop] startup mode selected: ${mode}`);
+      if (mode === "terminal") terminalMode = true;
+      startupWindow.removeAllListeners("closed");
       startupWindow.close();
       startupWindow = undefined;
       resolve(mode);
@@ -193,13 +223,18 @@ app.whenReady().then(async () => {
           "No supported terminal emulator was found. Install xdg-terminal-exec, x-terminal-emulator, GNOME Terminal, Konsole, xfce4-terminal, or xterm.",
         );
       }
-      app.quit();
+      starting = false;
       return;
     }
-    startBackend();
+    if (await probeAdmin()) {
+      console.log("[desktop] existing backend detected; reusing it");
+    } else {
+      startBackend();
+    }
     // Create the native window before waiting for Python. This gives users
     // immediate visual feedback even if backend startup is slow or fails.
     await createWindow();
+    starting = false;
     console.log("[desktop] desktop window created");
   } catch (error) {
     console.error("[desktop] startup failed", error);
@@ -208,8 +243,14 @@ app.whenReady().then(async () => {
   }
 });
 
-app.on("window-all-closed", () => app.quit());
+app.on("window-all-closed", () => {
+  if (!starting && !terminalMode) app.quit();
+});
 app.on("before-quit", (event) => {
+  if (terminalMode && !quitting) {
+    event.preventDefault();
+    return;
+  }
   mainWindow = null;
   if (backend && !backend.killed && !quitting) {
     event.preventDefault();

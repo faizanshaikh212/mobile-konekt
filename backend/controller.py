@@ -7,7 +7,7 @@ from time import time
 from uuid import uuid4
 from backend.persistence import JsonStore, LayoutStore, device_ref
 
-from evdev import AbsInfo, UInput, ecodes
+from evdev import AbsInfo, InputDevice, UInput, ecodes, list_devices
 
 MAX_PLAYERS = 8
 STICK_DEADZONE = 0.06
@@ -177,6 +177,46 @@ class ControllerManager:
                     layout_id, layout, "", "Mobile device"
                 )
         self._lock = Lock()
+        self.physical_players = {}
+
+    def physical_snapshot(self):
+        devices = []
+        for path in list_devices():
+            try:
+                device = InputDevice(path)
+                if (device.name or "").startswith("Phone Controller "):
+                    device.close()
+                    continue
+                capabilities = device.capabilities()
+                keys = set(capabilities.get(ecodes.EV_KEY, []))
+                axes = capabilities.get(ecodes.EV_ABS, [])
+                if not axes and not (
+                    ecodes.BTN_GAMEPAD in keys or ecodes.BTN_JOYSTICK in keys
+                ):
+                    device.close()
+                    continue
+                player = self.physical_players.get(path)
+                devices.append(
+                    {
+                        "id": f"physical:{path}",
+                        "label": device.name or "Physical controller",
+                        "player": player,
+                        "connected": True,
+                        "physical": True,
+                        "remote": "",
+                        "path": path,
+                    }
+                )
+                device.close()
+            except OSError:
+                continue
+        active = {item["id"] for item in devices}
+        self.physical_players = {
+            path: player
+            for path, player in self.physical_players.items()
+            if f"physical:{path}" in active
+        }
+        return devices
 
     def claim(self, device_id=None, remote="unknown", label="Mobile device"):
         old_controller = None
@@ -306,7 +346,7 @@ class ControllerManager:
                             "connected": False,
                         }
                     )
-            return result
+            return result + self.physical_snapshot()
 
     def rename(self, session_id, label):
         with self._lock:
@@ -339,18 +379,42 @@ class ControllerManager:
         return self.store.delete(session_id) or device is not None
 
     def assign(self, session_id, player):
+        if player < 1 or player > self.max_players:
+            return False
+        physical = self.physical_snapshot()
+        if session_id.startswith("physical:"):
+            path = session_id.removeprefix("physical:")
+            if not any(item["id"] == session_id for item in physical):
+                return False
+            with self._lock:
+                mobile_players = {
+                    item.get("player")
+                    for item in self.devices.values()
+                    if item.get("player") is not None
+                }
+            if player in mobile_players or any(
+                item.get("player") == player
+                and item.get("id") != session_id
+                for item in physical
+            ):
+                return False
+            self.physical_players[path] = player
+            return True
         with self._lock:
             device = self.devices.get(session_id)
-            if device is None or player < 1 or player > self.max_players:
-                if (
-                    player < 1
-                    or player > self.max_players
-                    or not self.store.get(session_id)
-                ):
+            if device is None:
+                if not self.store.get(session_id):
+                    return False
+                if any(item.get("player") == player for item in physical):
                     return False
                 self.store.update(session_id, player=player)
                 return True
             old_player = device["player"]
+            if any(
+                item.get("player") == player
+                for item in physical
+            ):
+                return False
             other = next(
                 (
                     item

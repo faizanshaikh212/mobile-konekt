@@ -190,30 +190,36 @@
   left: 50%;
   transform: translateX(-50%);
 }
+.deck.grid-64::before,
 .deck.grid-32::before,
 .deck.grid-16::before,
-.deck.grid-8::before,
-.deck.grid-4::before {
+.deck.grid-8::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0.24;
+  background-size: var(--grid-x-step) var(--grid-y-step);
+}
+.deck.grid-64::before {
   background-image:
     linear-gradient(to right, #61e4d044 1px, transparent 1px),
     linear-gradient(to bottom, #61e4d044 1px, transparent 1px);
 }
 .deck.grid-32::before {
-  background-size: 3.125% 3.125%;
+  background-image:
+    linear-gradient(to right, #61e4d044 1px, transparent 1px),
+    linear-gradient(to bottom, #61e4d044 1px, transparent 1px);
 }
 .deck.grid-16::before {
-  background-size: 6.25% 6.25%;
+  background-image:
+    linear-gradient(to right, #61e4d044 1px, transparent 1px),
+    linear-gradient(to bottom, #61e4d044 1px, transparent 1px);
 }
 .deck.grid-8::before {
-  background-size: 12.5% 12.5%;
-}
-.deck.grid-4::before {
-  background-size: 25% 25%;
+  background-image:
+    linear-gradient(to right, #61e4d044 1px, transparent 1px),
+    linear-gradient(to bottom, #61e4d044 1px, transparent 1px);
 }
 .center-brand {
   position: absolute;
@@ -265,6 +271,19 @@
   cursor: grabbing;
   border-color: var(--cyan);
 }
+.resize-grip {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  z-index: 6;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #071414;
+  border-radius: 50%;
+  background: var(--cyan);
+  cursor: nwse-resize;
+  touch-action: none;
+}
 .drag-grip {
   position: absolute;
   top: -6px;
@@ -283,11 +302,15 @@
 .layout-editing .layout-control > * {
   pointer-events: none;
 }
+.layout-editing .layout-control .resize-grip {
+  pointer-events: auto;
+}
 .layout-editing .layout-control-editing {
   touch-action: none;
 }
 .game-button {
   touch-action: none;
+  -webkit-tap-highlight-color: transparent;
   border: 1px solid #33414a;
   background: linear-gradient(145deg, #28353d, #161f26);
   color: #b9c8ca;
@@ -300,6 +323,12 @@
     box-shadow 0.07s,
     border-color 0.07s,
     color 0.07s;
+}
+.game-button:focus,
+.game-button:focus-visible,
+.trigger:focus,
+.trigger:focus-visible {
+  outline: none;
 }
 .game-button:hover {
   border-color: #547078;
@@ -319,6 +348,24 @@
   font:
     600 clamp(10px, 1.3vw, 14px) "DM Mono",
     monospace;
+}
+.control-lb .game-button,
+.control-rb .game-button {
+  width: clamp(58px, 9vw, 108px);
+  height: clamp(34px, 5vw, 42px);
+  border-radius: 12px;
+  background: #151e24;
+  border-color: #304049;
+  box-shadow:
+    0 5px 0 #080c0f,
+    0 8px 15px #0007;
+  color: #91a1a8;
+}
+.control-lb .game-button.pressed,
+.control-rb .game-button.pressed {
+  background: linear-gradient(#64dac7, #2f837e);
+  color: #071414;
+  border-color: #64dac7;
 }
 .control-y .game-button,
 .control-x .game-button,
@@ -344,6 +391,28 @@
   place-items: center;
   color: #91a1a8;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.07s,
+    border-color 0.07s,
+    box-shadow 0.07s;
+}
+.control-lt .trigger,
+.control-rt .trigger {
+  width: clamp(48px, 7vw, 82px);
+  height: clamp(40px, 6vw, 60px);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #28353d, #161f26);
+  border-color: #33414a;
+}
+.control-lt .trigger.pressed,
+.control-rt .trigger.pressed {
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 #080c0f,
+    0 0 18px #62dfd044;
+  color: var(--cyan);
+  border-color: var(--cyan);
 }
 .trigger span {
   position: absolute;

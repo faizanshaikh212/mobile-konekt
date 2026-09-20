@@ -1,135 +1,91 @@
-"""Small stdlib-only terminal dashboard for the host backend."""
+"""Simple, low-overhead command-line dashboard for the host backend."""
 
 from __future__ import annotations
 
-import os
-import select
 import sys
-import termios
-import time
-import tty
 
 
 class TerminalUI:
-    """A low-overhead, keyboard-driven view over a ControllerManager."""
+    """A line-oriented admin console that works in any normal terminal."""
 
     def __init__(self, manager, server_info, stop_callback):
         self.manager = manager
         self.server_info = server_info
         self.stop_callback = stop_callback
-        self.selected = 0
-        self.message = "Ready"
-        self._old_terminal = None
 
-    @property
-    def interactive(self):
-        return sys.stdin.isatty() and sys.stdout.isatty()
+    def _devices(self):
+        return sorted(
+            self.manager.snapshot(),
+            key=lambda item: (not item.get("connected", False), item.get("id", "")),
+        )
 
-    def _write(self, text):
-        sys.stdout.write(text)
-        sys.stdout.flush()
-
-    def render(self):
-        devices = sorted(self.manager.snapshot(), key=lambda item: (not item.get("connected", False), item.get("id", "")))
-        if devices:
-            self.selected = min(self.selected, len(devices) - 1)
-        else:
-            self.selected = 0
-        lines = [
-            "\x1b[2J\x1b[H",
-            "MobileKonekt terminal dashboard  (q quit, r refresh, arrows/j/k select)",
-            f"Phone: http://{self.server_info['lan_ip']}:{self.server_info['phone_http']}  "
-            f"WebSocket: {self.server_info['websocket']}",
-            "Commands: z reset inputs | n rename | a assign player | d disconnect | x delete saved data",
-            "-" * 96,
-        ]
+    def _show(self):
+        print("\nMobileKonekt TUI")
+        print(f"Phone URL: http://{self.server_info['lan_ip']}:{self.server_info['phone_http']}")
+        print("-" * 72)
+        devices = self._devices()
         if not devices:
-            lines.append("  No devices connected or remembered.")
-        for index, device in enumerate(devices):
-            marker = ">" if index == self.selected else " "
+            print("No connected or remembered devices.")
+        for index, device in enumerate(devices, 1):
             state = "connected" if device.get("connected") else "offline"
-            label = device.get("label") or "(unnamed)"
-            remote = device.get("remote") or "-"
-            lines.append(
-                f"{marker} {index + 1:>2}. P{device.get('player') or '-':<2} "
-                f"{state:<9} {label[:24]:<24} {remote[:38]:<38} {device.get('id', '')}"
+            print(
+                f"{index}. {device.get('label') or '(unnamed)'} | "
+                f"player {device.get('player') or '-'} | {state} | "
+                f"{device.get('remote') or device.get('id')}"
             )
-        lines.extend(["-" * 96, self.message])
-        self._write("\n".join(lines) + "\n")
-        return devices
+        print("Commands: r refresh, z reset, n rename, a assign, d disconnect, x delete, q quit")
 
-    def _selected(self):
-        devices = sorted(self.manager.snapshot(), key=lambda item: (not item.get("connected", False), item.get("id", "")))
-        return devices[self.selected] if devices and self.selected < len(devices) else None
-
-    def _prompt(self, prompt):
-        self._restore_terminal()
+    def _choose(self, devices):
+        if not devices:
+            print("No device selected.")
+            return None
         try:
-            return input(f"\n{prompt}: ")
-        finally:
-            self._set_raw_terminal()
+            index = int(input("Device number: ")) - 1
+            return devices[index] if 0 <= index < len(devices) else None
+        except (EOFError, ValueError):
+            return None
 
     def _action(self, command):
-        device = self._selected()
+        devices = self._devices()
         if command == "r":
-            self.message = "Refreshed"
-        elif command == "z":
+            return
+        if command == "z":
             self.manager.reset_all()
-            self.message = "All inputs reset"
-        elif command in ("n", "a") and not device:
-            self.message = "Select a device first"
-        elif command == "n":
-            label = self._prompt("New name").strip()
-            self.message = "Renamed" if self.manager.rename(device["id"], label) else "Device not found"
+            print("All inputs reset.")
+            return
+        device = self._choose(devices)
+        if device is None:
+            print("Invalid device.")
+            return
+        device_id = device["id"]
+        if command == "n":
+            self.manager.rename(device_id, input("New name: ").strip())
+            print("Device renamed.")
         elif command == "a":
             try:
-                player = int(self._prompt("Player number"))
+                player = int(input("Player number: "))
             except ValueError:
-                self.message = "Player must be an integer"
+                print("Player must be a number.")
             else:
-                self.message = "Player assigned" if self.manager.assign(device["id"], player) else "Assignment failed"
+                print("Player assigned." if self.manager.assign(device_id, player) else "Assignment failed.")
         elif command == "d":
-            self.message = "Select a device first" if not device else (
-                "Disconnected" if self.manager.disconnect(device["id"]) else "Device not found"
-            )
+            print("Disconnected." if self.manager.disconnect(device_id) else "Device not found.")
         elif command == "x":
-            self.message = "Select a device first" if not device else (
-                "Saved data deleted" if self.manager.delete_device_data(device["id"]) else "No saved data"
-            )
-
-    def _set_raw_terminal(self):
-        if self._old_terminal is None:
-            self._old_terminal = termios.tcgetattr(sys.stdin)
-            tty.setcbreak(sys.stdin.fileno())
-
-    def _restore_terminal(self):
-        if self._old_terminal is not None:
-            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self._old_terminal)
-            self._old_terminal = None
+            print("Deleted." if self.manager.delete_device_data(device_id) else "Device data not found.")
 
     def run(self):
-        if not self.interactive:
-            self._write("Terminal dashboard requires an interactive TTY; running backend without it.\n")
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            print("TUI needs an interactive terminal; backend is running without the dashboard.")
             return
-        try:
-            self._set_raw_terminal()
-            while True:
-                self.render()
-                ready, _, _ = select.select([sys.stdin], [], [], 1.0)
-                if not ready:
-                    continue
-                key = os.read(sys.stdin.fileno(), 8).decode(errors="ignore")
-                if key in ("q", "\x03"):
-                    self.stop_callback()
-                    return
-                if key in ("\x1b[A", "k"):
-                    self.selected = max(0, self.selected - 1)
-                elif key in ("\x1b[B", "j"):
-                    self.selected += 1
-                elif key in ("r", "z", "n", "a", "d", "x"):
-                    self._action(key)
-                elif key.isdigit() and key != "0":
-                    self.selected = int(key) - 1
-        finally:
-            self._restore_terminal()
-            self._write("\n")
+        while True:
+            self._show()
+            try:
+                command = input("> ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                self.stop_callback()
+                return
+            if command == "q":
+                self.stop_callback()
+                return
+            if command in {"r", "z", "n", "a", "d", "x"}:
+                self._action(command)

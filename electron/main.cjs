@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog } = require("electron");
-const { spawn, spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const { existsSync } = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -9,6 +9,7 @@ const isDevelopment = process.argv.includes("--dev") || !app.isPackaged;
 const externalBackend = process.argv.includes("--external-backend");
 let backend;
 let mainWindow;
+let quitting = false;
 
 // The admin panel does not need GPU compositing. Avoid initializing the GPU
 // stack on Linux, which can add startup latency and produce GLib warnings.
@@ -44,38 +45,18 @@ function terminalCommand() {
   const backend = backendCommand();
   backend.args = [...backend.args, "--tui"];
   const cwd = isDevelopment ? path.join(__dirname, "..") : process.resourcesPath;
-  const commandLine = [backend.command, ...backend.args]
-    .map((part) => `'${String(part).replaceAll("'", "'\\''")}'`)
-    .join(" ");
-  const shellArgs = ["-c", `exec ${commandLine}`];
-  const terminals = [
-    ["x-terminal-emulator", ["-e", "sh", ...shellArgs]],
-    ["gnome-terminal", ["--", "sh", ...shellArgs]],
-    ["konsole", ["-e", "sh", ...shellArgs]],
-    ["xfce4-terminal", ["--command", `sh ${shellArgs.map((arg) => `'${arg.replaceAll("'", "'\\''")}'`).join(" ")}`]],
-    ["kitty", ["sh", ...shellArgs]],
-    ["alacritty", ["-e", "sh", ...shellArgs]],
-  ];
-  return { cwd, terminals };
+  return { cwd, backend };
 }
 
 function openBackendInTerminal() {
-  const { cwd, terminals } = terminalCommand();
-  for (const [command, args] of terminals) {
-    const installed = spawnSync("which", [command], { stdio: "ignore" });
-    if (installed.status !== 0) continue;
-    try {
-      const terminal = spawn(command, args, {
-        cwd,
-        detached: true,
-        stdio: "ignore",
-        windowsHide: true,
-      });
-      terminal.unref();
-      return true;
-    } catch {}
-  }
-  return false;
+  const { cwd, backend } = terminalCommand();
+
+  spawn(backend.command, backend.args, {
+    cwd,
+    stdio: "inherit",
+    windowsHide: true,
+  });
+  return true;
 }
 
 async function chooseStartupMode() {
@@ -102,6 +83,10 @@ function startBackend() {
     cwd: isDevelopment ? path.join(__dirname, "..") : process.resourcesPath,
     stdio: "inherit",
     windowsHide: true,
+  });
+  backend.once("exit", (code, signal) => {
+    console.log(`[desktop] backend exited (${code ?? "null"}${signal ? `, ${signal}` : ""})`);
+    backend = undefined;
   });
   backend.once("error", (error) => {
     dialog.showErrorBox("MobileKonekt backend failed", error.message);
@@ -172,7 +157,7 @@ app.whenReady().then(async () => {
     if (mode === "terminal") {
       if (!openBackendInTerminal()) {
         throw new Error(
-          "No supported terminal emulator was found. Install x-terminal-emulator, gnome-terminal, Konsole, xfce4-terminal, kitty, or Alacritty.",
+          "No supported terminal emulator was found. Install xdg-terminal-exec, x-terminal-emulator, GNOME Terminal, Konsole, xfce4-terminal, or xterm.",
         );
       }
       app.quit();
@@ -189,10 +174,17 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => app.quit());
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   mainWindow = null;
-  if (backend && !backend.killed) {
-    backend.kill("SIGINT");
+  if (backend && !backend.killed && !quitting) {
+    event.preventDefault();
+    quitting = true;
+    // SIGTERM is handled by the backend and releases its listening sockets
+    // immediately, avoiding a stale server when switching startup modes.
+    const child = backend;
+    child.once("exit", () => app.exit(0));
+    backend.kill("SIGTERM");
     backend = undefined;
+    setTimeout(() => app.exit(0), 2000).unref();
   }
 });

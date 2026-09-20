@@ -10,6 +10,7 @@ import socket
 import sys
 import argparse
 import os
+import signal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -255,12 +256,12 @@ def main(argv=None):
     print(f"  Admin dashboard    : {admin_url}")
     print("  Open that URL in a browser on this Linux PC to manage devices")
     print("  Ctrl+C to stop\n")
-    stop_signal = None
-    tui_thread = None
-    if args.tui:
-        from threading import Event
+    from threading import Event
 
-        stop_signal = Event()
+    stop_signal = Event()
+    signal.signal(signal.SIGINT, lambda _signum, _frame: stop_signal.set())
+    signal.signal(signal.SIGTERM, lambda _signum, _frame: stop_signal.set())
+    if args.tui:
         info = {
             "lan_ip": phone_ip,
             "phone_http": HTTP_PORT,

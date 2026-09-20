@@ -68,7 +68,7 @@ class EncryptedStore:
 
 class JsonStore(EncryptedStore):
     def __init__(self, filename="state.json", root=None):
-        super().__init__(filename, root, {"devices": {}})
+        super().__init__(filename, root, {"devices": {}, "physical": {}})
         decoded = {}
         for token, item in self.data.get("devices", {}).items():
             try:
@@ -77,6 +77,8 @@ class JsonStore(EncryptedStore):
                 pass
             decoded[token] = item
         self.data["devices"] = decoded
+        if not isinstance(self.data.get("physical"), dict):
+            self.data["physical"] = {}
         legacy = self.data.pop("layouts", {})
         self.legacy_layouts = legacy if isinstance(legacy, dict) else {}
         if legacy or decoded:
@@ -89,7 +91,11 @@ class JsonStore(EncryptedStore):
                 self._cipher.encrypt(token.encode()).decode(): value
                 for token, value in self.data["devices"].items()
             }
-            payload = json.dumps({"devices": encoded}, indent=2, sort_keys=True)
+            payload = json.dumps(
+                {"devices": encoded, "physical": self.data.get("physical", {})},
+                indent=2,
+                sort_keys=True,
+            )
             temporary = self.path.with_suffix(self.path.suffix + ".tmp")
             temporary.write_text(payload, encoding="utf-8")
             os.replace(temporary, self.path)
@@ -121,6 +127,15 @@ class JsonStore(EncryptedStore):
             del self.data["devices"][token]
             self.save()
             return True
+
+    def get_physical_players(self):
+        with self._lock:
+            return dict(self.data.get("physical", {}))
+
+    def set_physical_player(self, identity, player):
+        with self._lock:
+            self.data.setdefault("physical", {})[identity] = player
+            self.save()
 
 
 class LayoutStore(EncryptedStore):

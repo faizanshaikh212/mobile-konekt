@@ -64,6 +64,7 @@ def make_admin_server(
                             "phone_http": phone_http_port,
                             "phone_websocket": websocket_port,
                             "phone_url": f"http://{lan_ip}:{phone_http_port}",
+                            "physical_controllers": True,
                         },
                     },
                 )

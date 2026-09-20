@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from threading import Lock
+from threading import RLock
 from time import time
 from uuid import uuid4
 from backend.persistence import JsonStore, LayoutStore, device_ref
@@ -176,8 +176,21 @@ class ControllerManager:
                 self.layout_store.save_layout(
                     layout_id, layout, "", "Mobile device"
                 )
-        self._lock = Lock()
-        self.physical_players = {}
+        self._lock = RLock()
+        self.physical_players = self.store.get_physical_players()
+
+    @staticmethod
+    def _physical_identity(device):
+        info = device.info
+        return "|".join(
+            (
+                device.name or "Physical controller",
+                device.phys or "",
+                str(info.vendor),
+                str(info.product),
+                str(info.version),
+            )
+        )
 
     def physical_snapshot(self):
         devices = []
@@ -195,7 +208,8 @@ class ControllerManager:
                 ):
                     device.close()
                     continue
-                player = self.physical_players.get(path)
+                identity = self._physical_identity(device)
+                player = self.physical_players.get(identity)
                 devices.append(
                     {
                         "id": f"physical:{path}",
@@ -205,18 +219,33 @@ class ControllerManager:
                         "physical": True,
                         "remote": "",
                         "path": path,
+                        "identity": identity,
                     }
                 )
                 device.close()
             except OSError:
                 continue
         active = {item["id"] for item in devices}
-        self.physical_players = {
-            path: player
-            for path, player in self.physical_players.items()
-            if f"physical:{path}" in active
-        }
         return devices
+
+    def _assigned_players(self):
+        with self._lock:
+            mobile = {
+                item.get("player")
+                for item in self.devices.values()
+                if item.get("player") is not None
+            }
+            mobile.update(
+                item.get("player")
+                for item in self.store.snapshot().values()
+                if isinstance(item, dict) and item.get("player") is not None
+            )
+        physical = {
+            item.get("player")
+            for item in self.physical_snapshot()
+            if item.get("player") is not None
+        }
+        return mobile | physical
 
     def claim(self, device_id=None, remote="unknown", label="Mobile device"):
         old_controller = None
@@ -239,6 +268,7 @@ class ControllerManager:
                 if isinstance(preferred, int)
                 and 1 <= preferred <= self.max_players
                 and preferred not in self.controllers
+                and preferred not in self._assigned_players()
                 else None
             )
             if player is None:
@@ -247,6 +277,7 @@ class ControllerManager:
                         p
                         for p in range(1, self.max_players + 1)
                         if p not in self.controllers
+                        and p not in self._assigned_players()
                     ),
                     None,
                 )
@@ -382,23 +413,17 @@ class ControllerManager:
         if player < 1 or player > self.max_players:
             return False
         physical = self.physical_snapshot()
+        assigned = self._assigned_players()
         if session_id.startswith("physical:"):
             path = session_id.removeprefix("physical:")
             if not any(item["id"] == session_id for item in physical):
                 return False
-            with self._lock:
-                mobile_players = {
-                    item.get("player")
-                    for item in self.devices.values()
-                    if item.get("player") is not None
-                }
-            if player in mobile_players or any(
-                item.get("player") == player
-                and item.get("id") != session_id
-                for item in physical
-            ):
+            current = next(item for item in physical if item["id"] == session_id)
+            if player in assigned and current.get("player") != player:
                 return False
-            self.physical_players[path] = player
+            identity = current["identity"]
+            self.physical_players[identity] = player
+            self.store.set_physical_player(identity, player)
             return True
         with self._lock:
             device = self.devices.get(session_id)
@@ -410,10 +435,7 @@ class ControllerManager:
                 self.store.update(session_id, player=player)
                 return True
             old_player = device["player"]
-            if any(
-                item.get("player") == player
-                for item in physical
-            ):
+            if any(item.get("player") == player for item in physical):
                 return False
             other = next(
                 (

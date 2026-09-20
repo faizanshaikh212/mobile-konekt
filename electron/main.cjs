@@ -10,6 +10,10 @@ const externalBackend = process.argv.includes("--external-backend");
 let backend;
 let mainWindow;
 
+// The admin panel does not need GPU compositing. Avoid initializing the GPU
+// stack on Linux, which can add startup latency and produce GLib warnings.
+app.disableHardwareAcceleration();
+
 if (process.env.ELECTRON_OZONE_PLATFORM) {
   app.commandLine.appendSwitch(
     "ozone-platform",
@@ -105,19 +109,24 @@ function startBackend() {
 }
 
 async function waitForAdmin() {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const startedAt = Date.now();
+  const deadline = startedAt + 15000;
+  while (Date.now() < deadline) {
     const ready = await new Promise((resolve) => {
       const request = http.get(ADMIN_URL, (response) => {
         response.resume();
         resolve(response.statusCode >= 200 && response.statusCode < 400);
       });
-      request.setTimeout(500, () => {
+      request.setTimeout(200, () => {
         request.destroy();
         resolve(false);
       });
       request.on("error", () => resolve(false));
     });
-    if (ready) return;
+    if (ready) {
+      console.log(`[desktop] admin server ready after ${Date.now() - startedAt}ms`);
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("The local admin server did not start on port 8090.");

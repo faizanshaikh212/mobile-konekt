@@ -5,8 +5,11 @@ const http = require("node:http");
 const path = require("node:path");
 
 const ADMIN_URL = "http://127.0.0.1:8090";
+const DEV_FRONTEND_URL = "http://127.0.0.1:5173";
+const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const isDevelopment = process.argv.includes("--dev") || !app.isPackaged;
 let backend;
+let frontend;
 let mainWindow;
 let startupWindow;
 let terminalMode = false;
@@ -130,6 +133,55 @@ async function chooseStartupMode() {
   });
 }
 
+function startFrontend() {
+  if (!isDevelopment) return;
+  frontend = spawn(npmCommand, ["run", "dev:web"], {
+    cwd: path.join(__dirname, ".."),
+    env: process.env,
+    stdio: "inherit",
+    windowsHide: true,
+  });
+  frontend.once("error", (error) => {
+    dialog.showErrorBox("MobileKonekt frontend failed", error.message);
+    app.quit();
+  });
+  frontend.once("exit", (code, signal) => {
+    frontend = undefined;
+    if (!quitting && (code || signal)) {
+      dialog.showErrorBox(
+        "MobileKonekt frontend stopped",
+        `The Vite development server exited (${code ?? signal}).`,
+      );
+      app.quit();
+    }
+  });
+}
+
+async function waitForFrontend() {
+  if (!isDevelopment) return;
+  const startedAt = Date.now();
+  const deadline = startedAt + 15000;
+  while (Date.now() < deadline) {
+    const ready = await new Promise((resolve) => {
+      const request = http.get(DEV_FRONTEND_URL, (response) => {
+        response.resume();
+        resolve(response.statusCode >= 200 && response.statusCode < 400);
+      });
+      request.setTimeout(250, () => {
+        request.destroy();
+        resolve(false);
+      });
+      request.on("error", () => resolve(false));
+    });
+    if (ready) {
+      console.log(`[desktop] Vite frontend ready after ${Date.now() - startedAt}ms`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("The Vite development server did not start on port 5173.");
+}
+
 function startBackend() {
   const { command, args } = backendCommand();
   if (!isDevelopment && !existsSync(command)) {
@@ -137,6 +189,10 @@ function startBackend() {
   }
   backend = spawn(command, args, {
     cwd: isDevelopment ? path.join(__dirname, "..") : process.resourcesPath,
+    env: {
+      ...process.env,
+      ...(isDevelopment ? { MOBILEKONEKT_PHONE_HTTP_PORT: "5173" } : {}),
+    },
     stdio: "inherit",
     windowsHide: true,
   });
@@ -148,6 +204,7 @@ function startBackend() {
         `The backend exited with code ${code}. Check the terminal output for details.`,
       );
     }
+
     backend = undefined;
   });
   backend.once("error", (error) => {
@@ -226,6 +283,8 @@ app.whenReady().then(async () => {
       starting = false;
       return;
     }
+    startFrontend();
+    await waitForFrontend();
     if (await probeAdmin()) {
       console.log("[desktop] existing backend detected; reusing it");
     } else {
@@ -262,5 +321,8 @@ app.on("before-quit", (event) => {
     backend.kill("SIGTERM");
     backend = undefined;
     setTimeout(() => app.exit(0), 2000).unref();
+  }
+  if (frontend && !frontend.killed) {
+    frontend.kill("SIGTERM");
   }
 });

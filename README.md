@@ -55,19 +55,18 @@ Start the Python backend and open the native Electron admin window:
 npm run dev
 ```
 
-`npm run dev` is the recommended production-like development flow. It
-automatically prefers `.venv/bin/python` and shows a startup chooser: open the
-Electron admin panel or run the backend in a terminal. Electron mode starts the
-backend, waits for the admin service, and opens the desktop window. The phone
-controller is served from the current `dist/` build, so run `npm run build:web`
-after frontend changes.
+`npm run dev` starts Vite with HMR alongside the Python backend and native
+Electron admin panel. In Electron mode, the phone controller is served live
+from Vite on port 5173, while the Python WebSocket remains on port 8081.
+Frontend changes are reflected without rebuilding. The backend's port 8080
+still serves the built frontend for production-style/manual backend runs.
 
 ```sh
 npm run dev:web
 ```
 
-Use `npm run dev:web` when you specifically want the Vite browser/HMR frontend
-on port 5173. The backend-only command is `npm run backend`. The phone-ready
+Use `npm run dev:web` when you specifically want only the Vite browser/HMR
+frontend on port 5173. The backend-only command is `npm run backend`. The phone-ready
 production flow serves the built frontend on port 8080 and connects to the
 Python WebSocket backend on port 8081.
 

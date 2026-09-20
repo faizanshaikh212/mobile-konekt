@@ -27,6 +27,7 @@ from backend.tui import TerminalUI
 HTTP_PORT = 8080
 WEBSOCKET_PORT = 8081
 ADMIN_PORT = 8090
+PHONE_HTTP_PORT = int(os.getenv("MOBILEKONEKT_PHONE_HTTP_PORT", HTTP_PORT))
 if getattr(sys, "frozen", False):
     DIST_DIR = Path(getattr(sys, "_MEIPASS", Path.cwd())) / "dist"
 else:
@@ -347,7 +348,7 @@ def main(argv=None):
         args.admin_bind,
         args.admin_port,
         lan_ip=phone_ip,
-        phone_http_port=HTTP_PORT,
+        phone_http_port=PHONE_HTTP_PORT,
         websocket_port=WEBSOCKET_PORT,
     )
     admin_url = (
@@ -356,7 +357,7 @@ def main(argv=None):
         else f"http://{args.admin_bind}:{args.admin_port}"
     )
     print("\n  Phone Controller\n  " + "-" * 34)
-    print(f"  Open on your phone : http://{phone_ip}:{HTTP_PORT}")
+    print(f"  Open on your phone : http://{phone_ip}:{PHONE_HTTP_PORT}")
     print(f"  WebSocket port     : {WEBSOCKET_PORT}")
     print(f"  Admin dashboard    : {admin_url}")
     print("  Open that URL in a browser on this Linux PC to manage devices")
@@ -369,7 +370,7 @@ def main(argv=None):
     if args.tui:
         info = {
             "lan_ip": phone_ip,
-            "phone_http": HTTP_PORT,
+            "phone_http": PHONE_HTTP_PORT,
             "websocket": WEBSOCKET_PORT,
         }
         tui = TerminalUI(manager, info, stop_signal.set)

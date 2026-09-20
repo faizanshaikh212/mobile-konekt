@@ -80,6 +80,12 @@ the backend can serve the generated `dist/` directory. To use the native Linux
 desktop shell during development, run `npm run dev:desktop`; it starts the
 Python backend and opens the host dashboard in Electron.
 
+Choosing terminal mode starts a lightweight keyboard-driven TUI instead of
+Electron. It keeps the phone URL and connected-device list visible while using
+`r` to refresh, `z` to reset inputs, `n` to rename, `a` to assign a player,
+`d` to disconnect, and `x` to delete saved device data. Use the arrow keys or
+`j`/`k` to select a device and `q` to stop the backend.
+
 To create a native Linux executable bundle:
 
 ```sh

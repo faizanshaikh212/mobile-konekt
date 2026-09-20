@@ -18,6 +18,8 @@ import websockets
 
 from backend.controller import ControllerManager
 from backend.admin import make_admin_server
+from backend.tui import TerminalUI
+from backend.tui import TerminalUI
 
 HTTP_PORT = 8080
 WEBSOCKET_PORT = 8081
@@ -187,7 +189,7 @@ async def websocket_handler(websocket, manager):
             manager.release_session(session_id, websocket)
 
 
-async def serve(http_server, admin_server, manager, websocket_port):
+async def serve(http_server, admin_server, manager, websocket_port, stop_signal=None):
     http_thread = Thread(
         target=http_server.serve_forever, name="http-server", daemon=True
     )
@@ -196,7 +198,6 @@ async def serve(http_server, admin_server, manager, websocket_port):
         target=admin_server.serve_forever, name="admin-server", daemon=True
     )
     admin_thread.start()
-    stop = asyncio.Event()
     try:
         async with websockets.serve(
             lambda ws, path=None: websocket_handler(ws, manager),
@@ -206,7 +207,8 @@ async def serve(http_server, admin_server, manager, websocket_port):
             ping_timeout=15,
             max_size=4096,
         ):
-            await stop.wait()
+            while stop_signal is None or not stop_signal.is_set():
+                await asyncio.sleep(0.25)
     finally:
         http_server.shutdown()
         http_server.server_close()
@@ -224,6 +226,11 @@ def main(argv=None):
         "--admin-port",
         type=int,
         default=int(os.getenv("MOBILEKONEKT_ADMIN_PORT", ADMIN_PORT)),
+    )
+    parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="show the server and device dashboard in the terminal",
     )
     args = parser.parse_args(argv)
     manager = ControllerManager()
@@ -248,8 +255,22 @@ def main(argv=None):
     print(f"  Admin dashboard    : {admin_url}")
     print("  Open that URL in a browser on this Linux PC to manage devices")
     print("  Ctrl+C to stop\n")
+    stop_signal = None
+    tui_thread = None
+    if args.tui:
+        from threading import Event
+
+        stop_signal = Event()
+        info = {
+            "lan_ip": phone_ip,
+            "phone_http": HTTP_PORT,
+            "websocket": WEBSOCKET_PORT,
+        }
+        tui = TerminalUI(manager, info, stop_signal.set)
+        tui_thread = Thread(target=tui.run, name="terminal-ui", daemon=True)
+        tui_thread.start()
     try:
-        asyncio.run(serve(http_server, admin_server, manager, WEBSOCKET_PORT))
+        asyncio.run(serve(http_server, admin_server, manager, WEBSOCKET_PORT, stop_signal))
     except KeyboardInterrupt:
         pass
     finally:

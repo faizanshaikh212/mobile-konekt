@@ -107,6 +107,10 @@ def make_admin_server(
                 elif path == "/api/reset":
                     manager.reset_all()
                     ok = True
+                elif path == "/api/delete":
+                    if not isinstance(session_id, str):
+                        raise ValueError("id is required")
+                    ok = manager.delete_device_data(session_id)
                 else:
                     self.respond(404, {"error": "not found"})
                     return

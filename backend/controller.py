@@ -309,6 +309,21 @@ class ControllerManager:
             self.store.update(session_id, label=label)
             return True
 
+    def delete_device_data(self, session_id):
+        """Disconnect and forget all persisted preferences for a device."""
+        with self._lock:
+            device = self.devices.get(session_id)
+            callback = device.get("disconnect") if device else None
+            player = device.get("player") if device else None
+            if device:
+                device["connected"] = False
+                device["disconnect"] = None
+        if callback:
+            callback()
+        if player is not None:
+            self.release(player, keep_device=False)
+        return self.store.delete(session_id) or device is not None
+
     def assign(self, session_id, player):
         with self._lock:
             device = self.devices.get(session_id)

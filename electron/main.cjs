@@ -42,6 +42,7 @@ function backendCommand() {
 
 function terminalCommand() {
   const backend = backendCommand();
+  backend.args = [...backend.args, "--tui"];
   const cwd = isDevelopment ? path.join(__dirname, "..") : process.resourcesPath;
   const commandLine = [backend.command, ...backend.args]
     .map((part) => `'${String(part).replaceAll("'", "'\\''")}'`)

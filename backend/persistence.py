@@ -62,3 +62,12 @@ class JsonStore:
                 for key, value in self.data["devices"].items()
                 if isinstance(value, dict)
             }
+
+    def delete(self, token):
+        """Remove a device's saved preferences, returning whether it existed."""
+        with self._lock:
+            if token not in self.data["devices"]:
+                return False
+            del self.data["devices"][token]
+            self.save()
+            return True

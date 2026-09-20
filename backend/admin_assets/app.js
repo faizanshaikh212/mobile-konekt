@@ -14,8 +14,9 @@ async function action(path, data = {}) {
     });
     if (!response.ok) throw new Error("request failed");
     await load();
-  } catch {
-    $("#server").textContent = "Admin action failed; try again";
+    $("#server").dataset.status = "Action completed";
+  } catch (error) {
+    $("#server").textContent = `Admin action failed: ${error.message}`;
   }
 }
 function render(state) {
@@ -29,7 +30,7 @@ function render(state) {
     ? state.devices
         .map(
           (d) =>
-            `<article class="card"><h3>${esc(d.label || `Device ${d.player}`)}</h3><div class="meta">Player ${d.player} · ${esc(d.remote)}<br>Connected ${new Date(d.connected_at * 1000).toLocaleString()}</div><input data-label="${esc(d.id)}" value="${esc(labelDrafts.get(d.id) ?? d.label ?? "")}" placeholder="Device label"><div class="actions"><button data-save="${esc(d.id)}">Save label</button><select data-player="${esc(d.id)}">${Array.from({ length: 8 }, (_, i) => `<option ${d.player === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select><button data-assign="${esc(d.id)}">Assign</button><button data-disconnect="${esc(d.id)}">Disconnect</button></div></article>`,
+            `<article class="card"><h3>${esc(d.label || `Device ${d.player || "unknown"}`)}</h3><div class="meta">${d.player ? `Player ${d.player} · ` : ""}${esc(d.remote || "offline")}<br>${d.connected_at ? `Connected ${new Date(d.connected_at * 1000).toLocaleString()}` : "Not currently connected"}</div><input data-label="${esc(d.id)}" value="${esc(labelDrafts.get(d.id) ?? d.label ?? "")}" placeholder="Device label"><div class="actions"><button data-save="${esc(d.id)}">Save label</button><select data-player="${esc(d.id)}">${Array.from({ length: 8 }, (_, i) => `<option ${d.player === i + 1 ? "selected" : ""}>${i + 1}</option>`).join("")}</select><button data-assign="${esc(d.id)}">Assign</button>${d.connected ? `<button data-disconnect="${esc(d.id)}">Disconnect</button>` : ""}<button class="danger" data-delete="${esc(d.id)}">Delete data</button></div></article>`,
         )
         .join("")
     : '<p class="meta">No phones connected.</p>';
@@ -67,6 +68,11 @@ document.addEventListener("click", (e) => {
     });
   if (t.dataset.disconnect && confirm("Disconnect this device?"))
     action("/api/disconnect", { id: t.dataset.disconnect });
+  if (
+    t.dataset.delete &&
+    confirm("Delete this device's saved label, layout, and settings?")
+  )
+    action("/api/delete", { id: t.dataset.delete });
 });
 load();
 setInterval(load, 3000);

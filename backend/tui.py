@@ -21,7 +21,14 @@ class TerminalUI:
 
     def _show(self):
         print("\nMobileKonekt TUI")
-        print(f"Phone URL: http://{self.server_info['lan_ip']}:{self.server_info['phone_http']}")
+        provider = self.server_info.get("phone_urls_provider")
+        urls = provider() if provider else self.server_info.get("phone_urls")
+        if urls:
+            print("Phone URLs:")
+            for item in urls:
+                print(f"  {item['url']} ({item['interface']})")
+        else:
+            print(f"Phone URL: http://{self.server_info['lan_ip']}:{self.server_info['phone_http']}")
         print("-" * 72)
         devices = self._devices()
         if not devices:

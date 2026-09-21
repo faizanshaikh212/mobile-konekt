@@ -38,6 +38,29 @@ HAT_AXIS = {
     "DOWN": (ecodes.ABS_HAT0Y, 1),
 }
 
+# A mouse, touchpad, tablet or some wireless receivers can expose ABS axes,
+# but gamepads also expose one of these button groups.  Requiring a gamepad
+# signature prevents those pointer devices from appearing in the dashboard.
+GAMEPAD_BUTTONS = {
+    ecodes.BTN_GAMEPAD,
+    ecodes.BTN_JOYSTICK,
+    ecodes.BTN_SOUTH,
+    ecodes.BTN_EAST,
+    ecodes.BTN_WEST,
+    ecodes.BTN_NORTH,
+    ecodes.BTN_TL,
+    ecodes.BTN_TR,
+    ecodes.BTN_THUMBL,
+    ecodes.BTN_THUMBR,
+    ecodes.BTN_SELECT,
+    ecodes.BTN_START,
+    ecodes.BTN_MODE,
+}
+POINTER_PROPERTIES = {
+    getattr(ecodes, "INPUT_PROP_POINTER", -1),
+    getattr(ecodes, "INPUT_PROP_DIRECT", -1),
+}
+
 
 def _stick_axis():
     return AbsInfo(value=0, min=-32767, max=32767, fuzz=16, flat=128, resolution=0)
@@ -192,6 +215,20 @@ class ControllerManager:
             )
         )
 
+    @staticmethod
+    def _is_physical_controller(device, capabilities):
+        keys = set(capabilities.get(ecodes.EV_KEY, []))
+        axes = capabilities.get(ecodes.EV_ABS, [])
+        if not axes:
+            return False
+        properties = set(device.properties())
+        if properties & POINTER_PROPERTIES:
+            return False
+        gamepad_keys = keys & GAMEPAD_BUTTONS
+        if ecodes.BTN_GAMEPAD in keys or ecodes.BTN_JOYSTICK in keys:
+            return True
+        return bool(axes) and len(gamepad_keys) >= 2
+
     def physical_snapshot(self):
         devices = []
         for path in list_devices():
@@ -203,9 +240,7 @@ class ControllerManager:
                 capabilities = device.capabilities()
                 keys = set(capabilities.get(ecodes.EV_KEY, []))
                 axes = capabilities.get(ecodes.EV_ABS, [])
-                if not axes and not (
-                    ecodes.BTN_GAMEPAD in keys or ecodes.BTN_JOYSTICK in keys
-                ):
+                if not self._is_physical_controller(device, capabilities):
                     device.close()
                     continue
                 identity = self._physical_identity(device)

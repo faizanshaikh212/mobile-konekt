@@ -1,6 +1,9 @@
 # MobileKonekt
 
-MobileKonekt turns phones on the local network into Linux virtual gamepads.
+MobileKonekt turns phones into Linux virtual gamepads. The **host backend only
+runs on Linux** because it creates an evdev `/dev/uinput` controller. Windows
+and macOS are not supported host platforms. Android and iPhone/iPad devices
+can be used as the controller client from their browser.
 
 ## Run on the host
 
@@ -46,6 +49,88 @@ sudo ufw allow in on <lan-interface> to any port 8081 proto tcp
 The Linux user running the backend needs permission to create `/dev/uinput`.
 Use an appropriate udev rule or run the backend with the permissions required
 by your distribution.
+
+## Using a phone over USB
+
+USB does not require a special MobileKonekt protocol: use USB tethering so the
+phone and Linux host share a network interface. MobileKonekt lists every
+usable IPv4 address in the admin dashboard and terminal, including interfaces
+such as `usb0`, `enx...`, `rndis...`, or `wwan...`. Open the URL labelled with
+that interface on the phone. The WebSocket automatically uses the same host
+and ports, so this path avoids unreliable Wi-Fi.
+
+The admin dashboard rechecks interfaces every time it refreshes (every three
+seconds), so USB tethering can be enabled after MobileKonekt has already
+started. Click **Refresh**, then open the newly listed USB URL on the phone.
+
+### Android USB tethering (recommended)
+
+1. Connect the Android phone with a USB data cable.
+2. On the phone, enable **Settings → Network & internet → Hotspot & tethering
+   → USB tethering**. The exact names vary by Android vendor.
+3. On Linux, wait for NetworkManager to create the USB interface and start
+   MobileKonekt. Find the URL marked with the new interface in the admin
+   dashboard (`http://127.0.0.1:8090`) or terminal.
+4. Open that URL in Chrome/Firefox on the phone. Keep USB tethering enabled
+   while playing.
+
+For a USB-only Android connection without tethering, enable **USB debugging**
+and install `adb`, then run:
+
+```sh
+adb devices                 # approve the phone's debugging prompt
+adb reverse tcp:8080 tcp:8080
+adb reverse tcp:8081 tcp:8081
+```
+
+Open `http://127.0.0.1:8080` on the phone. `adb reverse` forwards the phone's
+localhost ports to the Linux host and must be repeated after reconnecting the
+phone. This method needs Android USB debugging; it does not apply to iPhone.
+
+### iPhone/iPad USB connection
+
+On iOS/iPadOS, enable **Personal Hotspot → Allow Others to Join**, connect the
+device by USB, and trust the Linux computer if prompted. The Linux host must
+have an iPhone USB networking driver/interface available (commonly provided
+by `usbmuxd`/`libimobiledevice` packages on the distribution). Open the URL
+shown for that USB interface. If the interface is not created, use Wi-Fi
+hotspot instead; MobileKonekt cannot create the missing Linux networking
+driver.
+
+### Linux firewall and permissions
+
+Allow the phone ports on the USB interface, not on every interface:
+
+```sh
+sudo ufw allow in on <usb-interface> to any port 8080 proto tcp
+sudo ufw allow in on <usb-interface> to any port 8081 proto tcp
+```
+
+For firewalld:
+
+```sh
+sudo firewall-cmd --add-port=8080/tcp --permanent
+sudo firewall-cmd --add-port=8081/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+The backend also needs `/dev/uinput`. Common setup commands are:
+
+```sh
+# Arch/CachyOS/Manjaro
+sudo modprobe uinput
+sudo usermod -aG input "$USER"
+
+# Debian/Ubuntu/Linux Mint
+sudo modprobe uinput
+sudo usermod -aG input "$USER"
+```
+
+Log out and back in after changing group membership. If your distribution
+does not grant the `input` group access to `/dev/uinput`, add a udev rule
+matching your distribution's policy, reload udev, and verify with
+`ls -l /dev/uinput`. Do not run the whole desktop as root just to bypass this
+permission.
 
 ## Frontend development
 
@@ -123,8 +208,11 @@ The editor also supports square-cell **64×, 32×, 16×, and 8× grids** (or no
 grid); dragging snaps controls to the selected grid. Use the resize handle on
 an editing control to scale it, and saved/shared layouts preserve those sizes.
 The admin panel also detects connected physical evdev gamepads (for example an
-EvoFox pad) and lists them beside phones. Physical pads can be assigned an
-unused player number; the app leaves their native input handling untouched.
+EvoFox pad) and lists them beside phones. Detection requires gamepad button
+capabilities and rejects pointer/direct-input devices, so laptop trackpads,
+touchscreens, mice, keyboards, and many 2.4 GHz receiver interfaces are not
+shown as physical controllers. Physical pads can be assigned an unused player
+number; the app leaves their native input handling untouched.
 
 ## Project layout
 
@@ -136,6 +224,8 @@ unused player number; the app leaves their native input handling untouched.
 
 The virtual controller implementation uses Linux `evdev`/`uinput`; creating
 controllers is therefore limited to Linux hosts with `/dev/uinput` permission.
+This is why Windows and macOS are not supported as hosts, regardless of
+whether the phone is connected by Wi-Fi or USB.
 
 
 `npx electron-builder --linux tar.gz --publish never`

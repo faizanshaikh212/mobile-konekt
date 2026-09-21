@@ -13,6 +13,7 @@ import os
 import signal
 import secrets
 import re
+import subprocess
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
@@ -218,6 +219,38 @@ def lan_address():
         sock.close()
 
 
+def host_addresses():
+    """Return IPv4 addresses usable by a phone, including USB tethering."""
+    try:
+        output = subprocess.check_output(
+            ["ip", "-o", "-4", "addr", "show", "scope", "global"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        address = lan_address()
+        return [{"interface": "default route", "address": address}]
+    addresses = []
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 4:
+            continue
+        interface, address = fields[1], fields[3].split("/", 1)[0]
+        if address not in {item["address"] for item in addresses}:
+            addresses.append({"interface": interface, "address": address})
+    return addresses or [{"interface": "default route", "address": lan_address()}]
+
+
+def phone_urls():
+    return [
+        {
+            **address,
+            "url": f"http://{address['address']}:{PHONE_HTTP_PORT}",
+        }
+        for address in host_addresses()
+    ]
+
+
 async def websocket_handler(websocket, manager):
     loop = asyncio.get_running_loop()
     player, controller, session_id = None, None, None
@@ -342,7 +375,9 @@ def main(argv=None):
     http_server = make_http_server(
         store=manager.layout_store, device_store=manager.store
     )
-    phone_ip = lan_address()
+    addresses = host_addresses()
+    phone_ip = addresses[0]["address"]
+    urls = phone_urls()
     admin_server = make_admin_server(
         manager,
         args.admin_bind,
@@ -350,6 +385,8 @@ def main(argv=None):
         lan_ip=phone_ip,
         phone_http_port=PHONE_HTTP_PORT,
         websocket_port=WEBSOCKET_PORT,
+        phone_urls=urls,
+        phone_urls_provider=phone_urls,
     )
     admin_url = (
         f"http://127.0.0.1:{args.admin_port}"
@@ -357,7 +394,9 @@ def main(argv=None):
         else f"http://{args.admin_bind}:{args.admin_port}"
     )
     print("\n  Phone Controller\n  " + "-" * 34)
-    print(f"  Open on your phone : http://{phone_ip}:{PHONE_HTTP_PORT}")
+    print("  Open on your phone :")
+    for address in urls:
+        print(f"    {address['url']} ({address['interface']})")
     print(f"  WebSocket port     : {WEBSOCKET_PORT}")
     print(f"  Admin dashboard    : {admin_url}")
     print("  Open that URL in a browser on this Linux PC to manage devices")
@@ -372,6 +411,8 @@ def main(argv=None):
             "lan_ip": phone_ip,
             "phone_http": PHONE_HTTP_PORT,
             "websocket": WEBSOCKET_PORT,
+            "phone_urls": urls,
+            "phone_urls_provider": phone_urls,
         }
         tui = TerminalUI(manager, info, stop_signal.set)
         tui_thread = Thread(target=tui.run, name="terminal-ui", daemon=True)

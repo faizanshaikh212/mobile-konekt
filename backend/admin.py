@@ -29,6 +29,8 @@ def make_admin_server(
     lan_ip="127.0.0.1",
     phone_http_port=8080,
     websocket_port=8081,
+    phone_urls=None,
+    phone_urls_provider=None,
 ):
     class AdminHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -52,6 +54,16 @@ def make_admin_server(
         def do_GET(self):
             path = self.path.split("?", 1)[0]
             if path == "/api/state":
+                current_phone_urls = (
+                    phone_urls_provider() if phone_urls_provider else phone_urls
+                )
+                current_phone_urls = current_phone_urls or [
+                    {
+                        "interface": "default route",
+                        "address": lan_ip,
+                        "url": f"http://{lan_ip}:{phone_http_port}",
+                    }
+                ]
                 self.respond(
                     200,
                     {
@@ -64,6 +76,7 @@ def make_admin_server(
                             "phone_http": phone_http_port,
                             "phone_websocket": websocket_port,
                             "phone_url": f"http://{lan_ip}:{phone_http_port}",
+                            "phone_urls": current_phone_urls,
                             "physical_controllers": True,
                         },
                     },
